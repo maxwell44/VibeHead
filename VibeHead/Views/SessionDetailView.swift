@@ -25,6 +25,9 @@ struct SessionDetailView: View {
                         // 体态时间分解
                         PostureBreakdownCard(stats: stats)
                         
+                        // 体态时间轴图表
+                        PostureTimelineCard(session: session)
+                        
                         // 体态百分比进度条
                         PosturePercentageCard(stats: stats)
                         
@@ -286,6 +289,30 @@ struct PostureProgressBar: View {
             }
             .frame(height: 8)
         }
+    }
+}
+
+/// 体态时间轴图表卡片
+struct PostureTimelineCard: View {
+    let session: PomodoroSession
+    
+    var body: some View {
+        VStack(spacing: 16) {
+            // 标题
+            HStack {
+                Text("体态变化时间轴")
+                    .font(.title2)
+                    .fontWeight(.bold)
+                Spacer()
+            }
+            
+            // 时间轴图表
+            PostureTimelineChart(timelineData: SessionTimelineData(from: session))
+        }
+        .padding()
+        .background(Color(.systemBackground))
+        .cornerRadius(12)
+        .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
     }
 }
 
