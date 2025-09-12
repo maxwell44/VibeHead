@@ -6,6 +6,7 @@
 //
 
 import UIKit
+import SwiftUI
 
 class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
@@ -16,9 +17,13 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         // Use this method to optionally configure and attach the UIWindow `window` to the provided UIWindowScene `scene`.
         guard let windowScene = (scene as? UIWindowScene) else { return }
         
+        // 创建SwiftUI内容视图
+        let contentView = ContentView()
+            .environmentObject(LocalDataRepository())
+        
+        // 使用UIHostingController包装SwiftUI视图
         window = UIWindow(windowScene: windowScene)
-        let rootViewController = ViewController()
-        window?.rootViewController = rootViewController
+        window?.rootViewController = UIHostingController(rootView: contentView)
         window?.makeKeyAndVisible()
     }
 

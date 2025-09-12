@@ -19,5 +19,24 @@
 			</array>
 		</dict>
 	</dict>
+	<key>NSCameraUsageDescription</key>
+	<string>HealthyCode需要使用摄像头来检测您的工作体态，帮助您保持健康的坐姿。所有处理都在本地进行，不会上传任何视频数据。</string>
+	<key>CFBundleDisplayName</key>
+	<string>HealthyCode</string>
+	<key>CFBundleName</key>
+	<string>HealthyCode</string>
+	<key>UIRequiredDeviceCapabilities</key>
+	<array>
+		<string>front-facing-camera</string>
+	</array>
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+	</array>
+	<key>UISupportedInterfaceOrientations~ipad</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
+	</array>
 </dict>
 </plist>
