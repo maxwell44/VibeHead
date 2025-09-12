@@ -69,14 +69,14 @@
     - 添加体态时间的水平进度条组件
     - _需求: 3.5, 3.6, 4.5_
 
-- [ ] 5. 实现主工作界面集成
-  - [ ] 5.1 创建WorkSessionViewModel
+- [x] 5. 实现主工作界面集成
+  - [x] 5.1 创建WorkSessionViewModel
     - 集成PomodoroService和PostureDetectionService
     - 实现服务间的协调和状态同步
     - 添加会话开始、暂停、完成的统一控制
     - _需求: 2.8, 4.4_
 
-  - [ ] 5.2 构建主工作界面UI
+  - [x] 5.2 构建主工作界面UI
     - 创建WorkSessionView整合所有组件
     - 实现摄像头预览、计时器、体态状态的布局
     - 添加界面间的导航和状态保持
