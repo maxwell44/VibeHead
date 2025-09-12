@@ -23,6 +23,9 @@ protocol PostureDetectionServiceProtocol: ObservableObject {
     /// 当前不良体态持续时间
     var badPostureDuration: TimeInterval { get }
     
+    /// 摄像头预览图层
+    var previewLayer: AVCaptureVideoPreviewLayer? { get }
+    
     /// 体态变化发布者
     var postureChangePublisher: AnyPublisher<PostureType, Never> { get }
     
