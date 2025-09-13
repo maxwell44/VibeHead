@@ -142,6 +142,9 @@ class PostureDetectionService: NSObject, PostureDetectionServiceProtocol {
     private func setupDetection() {
         // Additional setup when camera permission is granted
         print("Camera permission granted, detection ready")
+        
+        // Start camera preview automatically when permission is granted
+        cameraService.startPreviewOnly()
     }
     
     // MARK: - Public Interface

@@ -136,6 +136,11 @@ class CameraService: NSObject, ObservableObject {
                 self.captureSession.commitConfiguration()
                 
                 print("Camera session configured successfully after permission granted")
+                
+                // Start preview immediately after configuration
+                DispatchQueue.main.async {
+                    self.startPreviewOnly()
+                }
             } catch {
                 self.captureSession.commitConfiguration()
                 self.handleCameraError(error)
@@ -287,6 +292,22 @@ class CameraService: NSObject, ObservableObject {
     }
     
     // MARK: - Session Control
+    
+    func startPreviewOnly() {
+        // Start session for preview only, without validation
+        sessionQueue.async { [weak self] in
+            guard let self = self else { return }
+            
+            if !self.captureSession.isRunning {
+                self.captureSession.startRunning()
+                
+                DispatchQueue.main.async {
+                    self.isSessionRunning = self.captureSession.isRunning
+                    print("Camera preview session started: \(self.isSessionRunning)")
+                }
+            }
+        }
+    }
     
     func startSession() {
         do {
