@@ -29,43 +29,7 @@ class WorkSessionViewController: BaseViewController {
     
     private let contentView = UIView()
     
-    // 摄像头预览区域
-    private let cameraContainerView: UIView = {
-        let view = UIView()
-        view.backgroundColor = .systemGray5
-        view.layer.cornerRadius = 16
-        view.clipsToBounds = true
-        return view
-    }()
-    
-    private let cameraPreviewView: UIView = {
-        let view = UIView()
-        view.backgroundColor = .black
-        return view
-    }()
-    
-    private let cameraPlaceholderView: UIView = {
-        let view = UIView()
-        view.backgroundColor = .systemGray5
-        return view
-    }()
-    
-    private let cameraPlaceholderImageView: UIImageView = {
-        let imageView = UIImageView()
-        imageView.image = UIImage(systemName: "camera.fill")
-        imageView.tintColor = .secondaryLabel
-        imageView.contentMode = .scaleAspectFit
-        return imageView
-    }()
-    
-    private let cameraPlaceholderLabel: UILabel = {
-        let label = UILabel()
-        label.text = "摄像头预览"
-        label.font = .systemFont(ofSize: 14, weight: .medium)
-        label.textColor = .secondaryLabel
-        label.textAlignment = .center
-        return label
-    }()
+    // 摄像头预览区域 - 已移除
     
     // 体态状态视图
     private let postureStatusContainerView: UIView = {
@@ -105,16 +69,34 @@ class WorkSessionViewController: BaseViewController {
         return label
     }()
     
-    // 计时器显示区域
+    // 计时器显示区域 - 圆形设计
     private let timerContainerView: UIView = {
         let view = UIView()
         view.backgroundColor = .secondarySystemBackground
-        view.layer.cornerRadius = 20
         view.layer.shadowColor = UIColor.black.cgColor
         view.layer.shadowOpacity = 0.1
         view.layer.shadowOffset = CGSize(width: 0, height: 4)
         view.layer.shadowRadius = 8
         return view
+    }()
+    
+    // 圆形进度环
+    private let progressRingLayer: CAShapeLayer = {
+        let layer = CAShapeLayer()
+        layer.fillColor = UIColor.clear.cgColor
+        layer.strokeColor = UIColor.primaryBlue.cgColor
+        layer.lineWidth = 8
+        layer.lineCap = .round
+        return layer
+    }()
+    
+    private let progressBackgroundRingLayer: CAShapeLayer = {
+        let layer = CAShapeLayer()
+        layer.fillColor = UIColor.clear.cgColor
+        layer.strokeColor = UIColor.systemGray5.cgColor
+        layer.lineWidth = 8
+        layer.lineCap = .round
+        return layer
     }()
     
     private let timerLabel: UILabel = {
@@ -135,46 +117,20 @@ class WorkSessionViewController: BaseViewController {
         return label
     }()
     
-    private let progressView: UIProgressView = {
-        let progressView = UIProgressView(progressViewStyle: .default)
-        progressView.progressTintColor = .primaryBlue
-        progressView.trackTintColor = .systemGray5
-        progressView.transform = CGAffineTransform(scaleX: 1, y: 2)
-        return progressView
+    // 圆环中心的设置图片
+    private let centerImageView: UIImageView = {
+        let imageView = UIImageView()
+        imageView.image = UIImage(named: "a1")
+        imageView.contentMode = .scaleAspectFit
+        imageView.isUserInteractionEnabled = true
+        imageView.layer.cornerRadius = 30
+        imageView.clipsToBounds = true
+        return imageView
     }()
     
-    // 会话信息区域
-    private let sessionInfoContainerView: UIView = {
-        let view = UIView()
-        view.backgroundColor = .secondarySystemBackground
-        view.layer.cornerRadius = 16
-        view.layer.shadowColor = UIColor.black.cgColor
-        view.layer.shadowOpacity = 0.05
-        view.layer.shadowOffset = CGSize(width: 0, height: 2)
-        view.layer.shadowRadius = 4
-        view.isHidden = true
-        return view
-    }()
+    // progressView 已移除，使用圆形进度环替代
     
-    private let sessionTitleLabel: UILabel = {
-        let label = UILabel()
-        label.text = "当前会话"
-        label.font = .systemFont(ofSize: 18, weight: .semibold)
-        label.textColor = .label
-        return label
-    }()
-    
-    private let sessionStateLabel: UILabel = {
-        let label = UILabel()
-        label.text = "工作中"
-        label.font = .systemFont(ofSize: 12, weight: .medium)
-        label.textColor = .healthyGreen
-        label.textAlignment = .center
-        label.backgroundColor = UIColor.healthyGreen.withAlphaComponent(0.2)
-        label.layer.cornerRadius = 12
-        label.clipsToBounds = true
-        return label
-    }()
+    // 会话信息区域 - 已移除
     
     // 体态警告横幅
     private let postureWarningView: UIView = {
@@ -293,12 +249,7 @@ class WorkSessionViewController: BaseViewController {
         view.addSubview(scrollView)
         scrollView.addSubview(contentView)
         
-        // 摄像头预览区域
-        contentView.addSubview(cameraContainerView)
-        cameraContainerView.addSubview(cameraPreviewView)
-        cameraContainerView.addSubview(cameraPlaceholderView)
-        cameraPlaceholderView.addSubview(cameraPlaceholderImageView)
-        cameraPlaceholderView.addSubview(cameraPlaceholderLabel)
+        // 摄像头预览区域 - 已移除
         
         // 体态状态区域
         contentView.addSubview(postureStatusContainerView)
@@ -306,19 +257,21 @@ class WorkSessionViewController: BaseViewController {
         postureStatusContainerView.addSubview(postureStatusLabel)
         postureStatusContainerView.addSubview(postureSubtitleLabel)
         
-        // 计时器区域
+        // 计时器区域 - 圆形设计
         contentView.addSubview(timerContainerView)
         timerContainerView.addSubview(timerLabel)
         timerContainerView.addSubview(timerStatusLabel)
-        timerContainerView.addSubview(progressView)
+        timerContainerView.addSubview(centerImageView)
         
-        // 会话信息区域
-        contentView.addSubview(sessionInfoContainerView)
-        sessionInfoContainerView.addSubview(sessionTitleLabel)
-        sessionInfoContainerView.addSubview(sessionStateLabel)
-        sessionInfoContainerView.addSubview(postureWarningView)
-        postureWarningView.addSubview(warningIconView)
-        postureWarningView.addSubview(warningLabel)
+        // 添加圆形进度环
+        timerContainerView.layer.addSublayer(progressBackgroundRingLayer)
+        timerContainerView.layer.addSublayer(progressRingLayer)
+        
+        // 添加点击手势
+        let tapGesture = UITapGestureRecognizer(target: self, action: #selector(centerImageTapped))
+        centerImageView.addGestureRecognizer(tapGesture)
+        
+        // 会话信息区域 - 已移除
         
         // 底部控制区域
         view.addSubview(bottomControlView)
@@ -345,35 +298,11 @@ class WorkSessionViewController: BaseViewController {
             make.width.equalToSuperview()
         }
         
-        // 摄像头预览区域约束
-        cameraContainerView.snp.makeConstraints { make in
-            make.top.equalToSuperview().offset(24)
-            make.leading.trailing.equalToSuperview().inset(16)
-            make.height.equalTo(200)
-        }
-        
-        cameraPreviewView.snp.makeConstraints { make in
-            make.edges.equalToSuperview()
-        }
-        
-        cameraPlaceholderView.snp.makeConstraints { make in
-            make.edges.equalToSuperview()
-        }
-        
-        cameraPlaceholderImageView.snp.makeConstraints { make in
-            make.centerX.equalToSuperview()
-            make.centerY.equalToSuperview().offset(-12)
-            make.width.height.equalTo(40)
-        }
-        
-        cameraPlaceholderLabel.snp.makeConstraints { make in
-            make.top.equalTo(cameraPlaceholderImageView.snp.bottom).offset(8)
-            make.centerX.equalToSuperview()
-        }
+        // 摄像头预览区域约束 - 已移除
         
         // 体态状态区域约束
         postureStatusContainerView.snp.makeConstraints { make in
-            make.top.equalTo(cameraContainerView.snp.bottom).offset(16)
+            make.top.equalToSuperview().offset(24)
             make.leading.trailing.equalToSuperview().inset(16)
         }
         
@@ -394,64 +323,30 @@ class WorkSessionViewController: BaseViewController {
             make.bottom.equalToSuperview().offset(-16)
         }
         
-        // 计时器区域约束
+        // 计时器区域约束 - 圆形设计
         timerContainerView.snp.makeConstraints { make in
-            make.top.equalTo(postureStatusContainerView.snp.bottom).offset(24)
-            make.leading.trailing.equalToSuperview().inset(16)
+            make.top.equalTo(postureStatusContainerView.snp.bottom).offset(32)
+            make.centerX.equalToSuperview()
+            make.width.height.equalTo(280)
+            make.bottom.equalToSuperview().offset(-32)
         }
         
         timerLabel.snp.makeConstraints { make in
-            make.top.equalToSuperview().offset(24)
-            make.centerX.equalToSuperview()
+            make.centerX.centerY.equalToSuperview()
         }
         
         timerStatusLabel.snp.makeConstraints { make in
-            make.top.equalTo(timerLabel.snp.bottom).offset(8)
+            make.top.equalTo(timerLabel.snp.bottom).offset(12)
             make.centerX.equalToSuperview()
         }
         
-        progressView.snp.makeConstraints { make in
-            make.top.equalTo(timerStatusLabel.snp.bottom).offset(16)
-            make.leading.trailing.equalToSuperview().inset(24)
-            make.bottom.equalToSuperview().offset(-24)
+        centerImageView.snp.makeConstraints { make in
+            make.bottom.equalTo(timerLabel.snp.top).offset(-20)
+            make.centerX.equalToSuperview()
+            make.width.height.equalTo(60)
         }
         
-        // 会话信息区域约束
-        sessionInfoContainerView.snp.makeConstraints { make in
-            make.top.equalTo(timerContainerView.snp.bottom).offset(16)
-            make.leading.trailing.equalToSuperview().inset(16)
-            make.bottom.equalToSuperview().offset(-24)
-        }
-        
-        sessionTitleLabel.snp.makeConstraints { make in
-            make.top.leading.equalToSuperview().offset(16)
-        }
-        
-        sessionStateLabel.snp.makeConstraints { make in
-            make.centerY.equalTo(sessionTitleLabel)
-            make.trailing.equalToSuperview().offset(-16)
-            make.width.greaterThanOrEqualTo(60)
-            make.height.equalTo(24)
-        }
-        
-        postureWarningView.snp.makeConstraints { make in
-            make.top.equalTo(sessionTitleLabel.snp.bottom).offset(12)
-            make.leading.trailing.equalToSuperview().inset(16)
-            make.bottom.equalToSuperview().offset(-16)
-        }
-        
-        warningIconView.snp.makeConstraints { make in
-            make.leading.equalToSuperview().offset(16)
-            make.centerY.equalToSuperview()
-            make.width.height.equalTo(20)
-        }
-        
-        warningLabel.snp.makeConstraints { make in
-            make.leading.equalTo(warningIconView.snp.trailing).offset(8)
-            make.centerY.equalToSuperview()
-            make.trailing.lessThanOrEqualToSuperview().offset(-16)
-            make.top.bottom.equalToSuperview().inset(12)
-        }
+        // 会话信息区域约束 - 已移除
         
         // 底部控制区域约束
         bottomControlView.snp.makeConstraints { make in
@@ -508,12 +403,21 @@ class WorkSessionViewController: BaseViewController {
         menuButton.tintColor = .primaryBlue
         navigationItem.leftBarButtonItem = menuButton
         
+        // 右侧摄像头测试按钮
+        let cameraTestButton = UIBarButtonItem(
+            image: UIImage(systemName: "camera.fill"),
+            style: .plain,
+            target: self,
+            action: #selector(cameraTestButtonTapped)
+        )
+        cameraTestButton.tintColor = .primaryBlue
+        navigationItem.rightBarButtonItem = cameraTestButton
+        
         // 右侧统计按钮（条件显示）
         updateNavigationBarButtons()
     }
     
     private func setupInitialState() {
-        updateCameraPreview()
         updateUI()
     }
     
@@ -523,7 +427,6 @@ class WorkSessionViewController: BaseViewController {
         guard viewModel != nil else { return }
         updateTimerDisplay()
         updatePostureStatus()
-        updateSessionInfo()
         updateControlButtons()
         updateNavigationBarButtons()
     }
@@ -536,28 +439,49 @@ class WorkSessionViewController: BaseViewController {
         let seconds = Int(timeRemaining) % 60
         timerLabel.text = String(format: "%02d:%02d", minutes, seconds)
         
-        // 更新进度
+        // 更新圆形进度
         let progress = viewModel.getSessionProgress()
-        progressView.setProgress(Float(progress), animated: true)
+        updateCircularProgress(progress: progress)
         
-        // 更新状态标签
+        // 更新状态标签和颜色
         switch viewModel.sessionState {
         case .idle:
             timerStatusLabel.text = "准备开始"
             timerStatusLabel.textColor = .secondaryLabel
+            progressRingLayer.strokeColor = UIColor.systemGray4.cgColor
         case .running:
             timerStatusLabel.text = "进行中"
             timerStatusLabel.textColor = .primaryBlue
+            progressRingLayer.strokeColor = UIColor.primaryBlue.cgColor
         case .paused:
             timerStatusLabel.text = "已暂停"
             timerStatusLabel.textColor = .warningOrange
+            progressRingLayer.strokeColor = UIColor.warningOrange.cgColor
         case .completed:
             timerStatusLabel.text = "已完成"
-            timerStatusLabel.textColor = .primaryBlue
+            timerStatusLabel.textColor = .healthyGreen
+            progressRingLayer.strokeColor = UIColor.healthyGreen.cgColor
         case .error:
             timerStatusLabel.text = "错误"
             timerStatusLabel.textColor = .alertRed
+            progressRingLayer.strokeColor = UIColor.alertRed.cgColor
         }
+    }
+    
+    private func updateCircularProgress(progress: Double) {
+        let center = CGPoint(x: timerContainerView.bounds.midX, y: timerContainerView.bounds.midY)
+        let radius: CGFloat = 120
+        let startAngle = -CGFloat.pi / 2
+        let endAngle = startAngle + 2 * CGFloat.pi
+        
+        // 更新背景环
+        let backgroundPath = UIBezierPath(arcCenter: center, radius: radius, startAngle: startAngle, endAngle: endAngle, clockwise: true)
+        progressBackgroundRingLayer.path = backgroundPath.cgPath
+        
+        // 更新进度环
+        let progressEndAngle = startAngle + 2 * CGFloat.pi * CGFloat(progress)
+        let progressPath = UIBezierPath(arcCenter: center, radius: radius, startAngle: startAngle, endAngle: progressEndAngle, clockwise: true)
+        progressRingLayer.path = progressPath.cgPath
     }
     
     private func updatePostureStatus() {
@@ -605,32 +529,7 @@ class WorkSessionViewController: BaseViewController {
         postureStatusContainerView.layer.borderColor = posture.color.cgColor
     }
     
-    private func updateSessionInfo() {
-        guard let viewModel = viewModel else { return }
-        
-        let isSessionActive = viewModel.isRunning || viewModel.isPaused
-        sessionInfoContainerView.isHidden = !isSessionActive
-        
-        if isSessionActive {
-            sessionStateLabel.text = viewModel.sessionStateDescription
-            
-            // 更新状态标签颜色
-            switch viewModel.sessionState {
-            case .running:
-                sessionStateLabel.textColor = .healthyGreen
-                sessionStateLabel.backgroundColor = UIColor.healthyGreen.withAlphaComponent(0.2)
-            case .paused:
-                sessionStateLabel.textColor = .warningOrange
-                sessionStateLabel.backgroundColor = UIColor.warningOrange.withAlphaComponent(0.2)
-            default:
-                sessionStateLabel.textColor = .secondaryLabel
-                sessionStateLabel.backgroundColor = UIColor.secondaryLabel.withAlphaComponent(0.2)
-            }
-            
-            // 更新体态警告
-            postureWarningView.isHidden = !viewModel.shouldShowPostureWarning()
-        }
-    }
+    // updateSessionInfo 方法已移除，因为会话信息区域已被移除
     
     private func updateControlButtons() {
         guard let viewModel = viewModel else { return }
@@ -681,42 +580,7 @@ class WorkSessionViewController: BaseViewController {
         }
     }
     
-    private func updateCameraPreview() {
-        guard let viewModel = viewModel else { return }
-        
-        switch viewModel.cameraPermissionStatus {
-        case .authorized:
-            if let previewLayer = viewModel.postureService.previewLayer {
-                setupCameraPreviewLayer(previewLayer)
-                cameraPlaceholderView.isHidden = true
-            } else {
-                cameraPlaceholderView.isHidden = false
-            }
-        case .denied, .restricted:
-            cameraPlaceholderView.isHidden = false
-            cameraPlaceholderImageView.tintColor = .alertRed
-            cameraPlaceholderLabel.text = "摄像头不可用"
-        case .notDetermined:
-            cameraPlaceholderView.isHidden = false
-            cameraPlaceholderImageView.tintColor = .secondaryLabel
-            cameraPlaceholderLabel.text = "点击授权摄像头"
-        @unknown default:
-            cameraPlaceholderView.isHidden = false
-        }
-    }
-    
-    private func setupCameraPreviewLayer(_ previewLayer: AVCaptureVideoPreviewLayer) {
-        // 移除现有的预览层
-        cameraPreviewView.layer.sublayers?.forEach { $0.removeFromSuperlayer() }
-        
-        // 设置新的预览层
-        previewLayer.frame = cameraPreviewView.bounds
-        previewLayer.videoGravity = .resizeAspectFill
-        cameraPreviewView.layer.addSublayer(previewLayer)
-        
-        // 确保连接启用
-        previewLayer.connection?.isEnabled = true
-    }
+    // updateCameraPreview 和 setupCameraPreviewLayer 方法已移除，因为摄像头预览区域已被移除
     
     // MARK: - Action Methods
     
@@ -745,6 +609,22 @@ class WorkSessionViewController: BaseViewController {
     
     @objc private func menuButtonTapped() {
         showMenuActionSheet()
+    }
+    
+    @objc private func cameraTestButtonTapped() {
+        let cameraTestVC = CameraTestViewController()
+        let navController = UINavigationController(rootViewController: cameraTestVC)
+        navController.modalPresentationStyle = .fullScreen
+        present(navController, animated: true)
+    }
+    
+    @objc private func centerImageTapped() {
+        // 只有在空闲状态下才能设置时间
+        guard let viewModel = viewModel, viewModel.sessionState == .idle else {
+            return
+        }
+        
+        showTimerSettingsAlert()
     }
     
     private func handlePrimaryAction() {
@@ -809,6 +689,51 @@ class WorkSessionViewController: BaseViewController {
         }
     }
     
+    private func showTimerSettingsAlert() {
+        let alert = UIAlertController(title: "设置工作时长", message: "选择工作时长（分钟）", preferredStyle: .actionSheet)
+        
+        // 获取当前设置的分钟数
+        let currentMinutes = Int(viewModel.getCurrentSettings().workDuration / 60)
+        
+        // 创建常用时间选项
+        let timeOptions = [5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60]
+        
+        for minutes in timeOptions {
+            let title = minutes == currentMinutes ? "✓ \(minutes) 分钟" : "\(minutes) 分钟"
+            alert.addAction(UIAlertAction(title: title, style: .default) { [weak self] _ in
+                self?.updateWorkDuration(minutes: minutes)
+            })
+        }
+        
+        // 取消按钮
+        alert.addAction(UIAlertAction(title: "取消", style: .cancel))
+        
+        // iPad支持
+        if let popover = alert.popoverPresentationController {
+            popover.sourceView = centerImageView
+            popover.sourceRect = centerImageView.bounds
+        }
+        
+        present(alert, animated: true)
+    }
+    
+    private func updateWorkDuration(minutes: Int) {
+        guard let viewModel = viewModel else { return }
+        
+        var settings = viewModel.getCurrentSettings()
+        settings.workDurationMinutes = minutes
+        viewModel.updateSettings(settings)
+        
+        // 更新UI显示
+        updateUI()
+        
+        // 显示确认消息
+        let message = "工作时长已设置为 \(minutes) 分钟"
+        let confirmAlert = UIAlertController(title: "设置成功", message: message, preferredStyle: .alert)
+        confirmAlert.addAction(UIAlertAction(title: "确定", style: .default))
+        present(confirmAlert, animated: true)
+    }
+    
     // MARK: - Navigation Methods
     
     private func presentStatisticsViewController() {
@@ -831,10 +756,25 @@ class WorkSessionViewController: BaseViewController {
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         
-        // 更新摄像头预览层frame
-        if let viewModel = viewModel,
-           let previewLayer = viewModel.postureService.previewLayer {
-            previewLayer.frame = cameraPreviewView.bounds
+        // 设置圆形计时器容器
+        setupCircularTimerContainer()
+        
+        // 更新圆形进度环的路径
+        if let viewModel = viewModel {
+            let progress = viewModel.getSessionProgress()
+            updateCircularProgress(progress: progress)
         }
     }
+    
+    private func setupCircularTimerContainer() {
+        // 设置圆形形状
+        timerContainerView.layer.cornerRadius = timerContainerView.bounds.width / 2
+        timerContainerView.clipsToBounds = false
+        
+        // 更新进度环的位置
+        let center = CGPoint(x: timerContainerView.bounds.midX, y: timerContainerView.bounds.midY)
+        progressBackgroundRingLayer.position = center
+        progressRingLayer.position = center
+    }
 }
+
