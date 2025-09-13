@@ -3,7 +3,7 @@ import Vision
 import AVFoundation
 import Combine
 
-class PostureDetectionService: NSObject, PostureDetectionServiceProtocol {
+class PostureDetectionService: NSObject, PostureDetectionServiceProtocol, @unchecked Sendable {
     @Published var currentPosture: PostureType = .excellent
     @Published var isDetecting = false
     @Published var cameraPermissionStatus: AVAuthorizationStatus = .notDetermined
@@ -164,16 +164,17 @@ class PostureDetectionService: NSObject, PostureDetectionServiceProtocol {
             
             isDetecting = true
             currentPostureStartTime = Date()
-            // TODO: Camera session will be managed by WorkSessionViewController
-            // cameraService.startSession()
             
-            print("Posture detection started")
+            print("🔍 体态检测已启动")
         } catch {
             handleDetectionError(error)
         }
     }
     
     private func validateDetectionRequirements() throws {
+        // 更新摄像头权限状态
+        cameraPermissionStatus = AVCaptureDevice.authorizationStatus(for: .video)
+        
         guard cameraPermissionStatus == .authorized else {
             throw HealthyCodeError.cameraPermissionDenied
         }
@@ -241,14 +242,12 @@ class PostureDetectionService: NSObject, PostureDetectionServiceProtocol {
     
     func stopDetection() {
         isDetecting = false
-        // TODO: Camera session will be managed by WorkSessionViewController
-        // cameraService.stopSession()
         postureWarningService?.stopMonitoring()
         
         // Record final posture if any
         recordCurrentPosture()
         
-        print("Posture detection stopped")
+        print("🔍 体态检测已停止")
     }
     
     func requestCameraPermission() async -> Bool {
@@ -269,7 +268,7 @@ class PostureDetectionService: NSObject, PostureDetectionServiceProtocol {
     
     // MARK: - Vision Processing
     
-    private func processVideoFrame(_ sampleBuffer: CMSampleBuffer) {
+    func processVideoFrame(_ sampleBuffer: CMSampleBuffer) {
         guard isDetecting else { return }
         
         // Apply performance-based frame throttling

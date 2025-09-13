@@ -7,7 +7,7 @@
 
 import UIKit
 import SnapKit
-import AVFoundation
+@preconcurrency import AVFoundation
 import Combine
 
 /// 主工作会话视图控制器，管理番茄钟和体态检测功能
@@ -21,6 +21,10 @@ class WorkSessionViewController: BaseViewController {
     private let captureSession = AVCaptureSession()
     private var previewLayer: AVCaptureVideoPreviewLayer?
     private let sessionQueue = DispatchQueue(label: "camera.session.queue")
+    private let videoOutput = AVCaptureVideoDataOutput()
+    
+    // MARK: - Posture Detection
+    private let postureDetectionService = PostureDetectionService()
     
     // MARK: - UI Components
     
@@ -566,6 +570,24 @@ class WorkSessionViewController: BaseViewController {
             .sink { [weak self] sessionState in
                 guard let self = self, self.isViewLoaded else { return }
                 self.handleSessionStateChange(sessionState)
+            }
+            .store(in: &cancellables)
+        
+        // 监听体态检测状态变化
+        postureDetectionService.$currentPosture
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] posture in
+                guard let self = self, self.isViewLoaded else { return }
+                self.updatePostureUI(posture)
+            }
+            .store(in: &cancellables)
+        
+        // 监听体态检测是否正在运行
+        postureDetectionService.$isDetecting
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] isDetecting in
+                guard let self = self, self.isViewLoaded else { return }
+                self.updateDetectionStatusUI(isDetecting)
             }
             .store(in: &cancellables)
     }
@@ -1358,6 +1380,15 @@ class WorkSessionViewController: BaseViewController {
             
             do {
                 let input = try AVCaptureDeviceInput(device: frontDevice)
+                
+                // 移除现有的输入和输出
+                for existingInput in self.captureSession.inputs {
+                    self.captureSession.removeInput(existingInput)
+                }
+                for existingOutput in self.captureSession.outputs {
+                    self.captureSession.removeOutput(existingOutput)
+                }
+                
                 if self.captureSession.canAddInput(input) {
                     self.captureSession.addInput(input)
                     
@@ -1381,6 +1412,38 @@ class WorkSessionViewController: BaseViewController {
                     
                     frontDevice.unlockForConfiguration()
                 }
+                
+                // 设置视频输出用于头部检测
+                self.videoOutput.setSampleBufferDelegate(self.postureDetectionService, queue: self.sessionQueue)
+                self.videoOutput.videoSettings = [
+                    kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA
+                ]
+                
+                // 设置视频输出的连接属性
+                if self.captureSession.canAddOutput(self.videoOutput) {
+                    self.captureSession.addOutput(self.videoOutput)
+                    
+                    // 设置视频方向
+                    if let connection = self.videoOutput.connection(with: .video) {
+                        if #available(iOS 17.0, *) {
+                            if connection.isVideoRotationAngleSupported(0) {
+                                connection.videoRotationAngle = 0
+                            }
+                        } else {
+                            if connection.isVideoOrientationSupported {
+                                connection.videoOrientation = .portrait
+                            }
+                        }
+                        if connection.isVideoMirroringSupported {
+                            connection.isVideoMirrored = true
+                        }
+                    }
+                    
+                    print("📷 视频输出添加成功，头部检测已启用")
+                } else {
+                    print("📷 无法添加视频输出")
+                }
+                
             } catch {
                 print("📷 创建摄像头输入失败：", error)
                 DispatchQueue.main.async { [weak self] in
@@ -1610,23 +1673,115 @@ class WorkSessionViewController: BaseViewController {
         // 根据会话状态变化更新摄像头状态
         switch sessionState {
         case .running:
-            // 会话开始时启动摄像头预览
+            // 会话开始时启动摄像头预览和头部检测
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
                 self.updateCenterImageViewState()
+                
+                // 启动头部检测
+                if !self.postureDetectionService.isDetecting {
+                    self.postureDetectionService.startDetection()
+                    print("🔍 头部检测已启动")
+                }
             }
         case .idle, .completed:
-            // 会话结束或重置时停止摄像头预览
+            // 会话结束或重置时停止摄像头预览和头部检测
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                 self.updateCenterImageViewState()
+                
+                // 停止头部检测
+                if self.postureDetectionService.isDetecting {
+                    self.postureDetectionService.stopDetection()
+                    print("🔍 头部检测已停止")
+                }
             }
         case .paused:
-            // 暂停时保持摄像头预览状态
-            break
+            // 暂停时保持摄像头预览状态，但可以暂停头部检测以节省资源
+            if self.postureDetectionService.isDetecting {
+                self.postureDetectionService.stopDetection()
+                print("🔍 头部检测已暂停")
+            }
         case .error:
-            // 错误状态时停止摄像头预览
+            // 错误状态时停止摄像头预览和头部检测
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                 self.updateCenterImageViewState()
+                
+                if self.postureDetectionService.isDetecting {
+                    self.postureDetectionService.stopDetection()
+                    print("🔍 头部检测已停止（错误状态）")
+                }
             }
+        }
+    }
+    
+    // MARK: - Posture Detection UI Updates
+    
+    private func updatePostureUI(_ posture: PostureType) {
+        print("🔍 体态状态更新: \(posture.rawValue)")
+        
+        // 更新体态状态图标和文字
+        switch posture {
+        case .excellent:
+            postureStatusIconView.image = UIImage(systemName: "checkmark.circle.fill")
+            postureStatusIconView.tintColor = .healthyGreen
+            postureStatusLabel.text = "优秀"
+            postureStatusLabel.textColor = .healthyGreen
+            postureSubtitleLabel.text = "保持良好"
+            postureSubtitleLabel.textColor = .systemGreen
+            
+        case .tooClose:
+            postureStatusIconView.image = UIImage(systemName: "exclamationmark.triangle.fill")
+            postureStatusIconView.tintColor = .warningOrange
+            postureStatusLabel.text = "距离过近"
+            postureStatusLabel.textColor = .warningOrange
+            postureSubtitleLabel.text = "请后退一些"
+            postureSubtitleLabel.textColor = .warningOrange
+            
+        case .lookingDown:
+            postureStatusIconView.image = UIImage(systemName: "arrow.up.circle.fill")
+            postureStatusIconView.tintColor = .warningOrange
+            postureStatusLabel.text = "低头"
+            postureStatusLabel.textColor = .warningOrange
+            postureSubtitleLabel.text = "请抬起头部"
+            postureSubtitleLabel.textColor = .warningOrange
+            
+        case .tilted:
+            postureStatusIconView.image = UIImage(systemName: "arrow.clockwise.circle.fill")
+            postureStatusIconView.tintColor = .warningOrange
+            postureStatusLabel.text = "头部倾斜"
+            postureStatusLabel.textColor = .warningOrange
+            postureSubtitleLabel.text = "请调整头部角度"
+            postureSubtitleLabel.textColor = .warningOrange
+            
+        case .notPresent:
+            postureStatusIconView.image = UIImage(systemName: "person.slash.fill")
+            postureStatusIconView.tintColor = .systemGray
+            postureStatusLabel.text = "未检测到"
+            postureStatusLabel.textColor = .systemGray
+            postureSubtitleLabel.text = "请面向摄像头"
+            postureSubtitleLabel.textColor = .systemGray
+        }
+        
+        // 添加轻微的动画效果
+        UIView.animate(withDuration: 0.3, delay: 0, usingSpringWithDamping: 0.7, initialSpringVelocity: 0.3) {
+            self.postureStatusContainerView.transform = CGAffineTransform(scaleX: 1.05, y: 1.05)
+        } completion: { _ in
+            UIView.animate(withDuration: 0.2) {
+                self.postureStatusContainerView.transform = .identity
+            }
+        }
+    }
+    
+    private func updateDetectionStatusUI(_ isDetecting: Bool) {
+        if isDetecting {
+            showCameraStatusMessage("头部检测运行中", isError: false)
+            
+            // 延迟隐藏状态消息
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+                self.hideCameraStatusMessage()
+            }
+        } else {
+            // 如果检测停止，立即隐藏状态消息
+            hideCameraStatusMessage()
         }
     }
     
