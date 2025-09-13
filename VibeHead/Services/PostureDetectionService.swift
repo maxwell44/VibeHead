@@ -371,8 +371,8 @@ class PostureDetectionService: NSObject, PostureDetectionServiceProtocol, @unche
                 self.lastFaceObservation = primaryFace
                 self.analyzeFaceObservation(primaryFace)
             } else {
-                // No face detected - could indicate user is away
-                self.updatePosture(.excellent) // Default to excellent when no face
+                // No face detected - user is not present
+                self.updatePosture(.notPresent)
             }
         }
     }
