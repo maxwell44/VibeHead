@@ -17,13 +17,16 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         // Use this method to optionally configure and attach the UIWindow `window` to the provided UIWindowScene `scene`.
         guard let windowScene = (scene as? UIWindowScene) else { return }
         
-        // 创建SwiftUI内容视图
-        let contentView = ContentView()
-            .environmentObject(LocalDataRepository())
+        // 创建数据仓库
+        let dataRepository = LocalDataRepository()
+        
+        // 直接创建主工作视图
+        let workSessionView = WorkSessionView()
+            .environmentObject(dataRepository)
         
         // 使用UIHostingController包装SwiftUI视图
         window = UIWindow(windowScene: windowScene)
-        window?.rootViewController = UIHostingController(rootView: contentView)
+        window?.rootViewController = UIHostingController(rootView: workSessionView)
         window?.makeKeyAndVisible()
     }
 
