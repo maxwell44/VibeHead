@@ -295,18 +295,43 @@ class WorkSessionViewController: BaseViewController {
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         updateUI()
+        
         // 视图出现时检查是否需要恢复摄像头预览
         if shouldShowCameraPreview() && previewLayer == nil {
             updateCenterImageViewState()
+        }
+        
+        // 注册应用生命周期通知
+        registerAppLifecycleNotifications()
+    }
+    
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        
+        // 视图完全显示后，如果需要摄像头预览且当前没有运行，则启动
+        if shouldShowCameraPreview() && !captureSession.isRunning {
+            startCameraPreview()
         }
     }
     
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
-        // 当视图即将消失时，停止摄像头预览以节省资源
-        if previewLayer != nil {
+        
+        // 当视图即将消失时，暂停摄像头预览以节省资源
+        // 但不完全停止，以便快速恢复
+        pauseCameraSession()
+    }
+    
+    override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        
+        // 视图完全消失后，停止摄像头预览以释放资源
+        if captureSession.isRunning {
             stopCameraPreview()
         }
+        
+        // 注销应用生命周期通知
+        unregisterAppLifecycleNotifications()
     }
     
     // MARK: - Setup Methods
@@ -458,7 +483,9 @@ class WorkSessionViewController: BaseViewController {
         Timer.publish(every: 1.0, on: .main, in: .common)
             .autoconnect()
             .sink { [weak self] _ in
-                self?.updateUI()
+                // 确保视图控制器仍然存在且视图已加载
+                guard let self = self, self.isViewLoaded else { return }
+                self.updateUI()
             }
             .store(in: &cancellables)
         
@@ -466,8 +493,9 @@ class WorkSessionViewController: BaseViewController {
         viewModel.$showingError
             .receive(on: DispatchQueue.main)
             .sink { [weak self] showingError in
-                if showingError, let errorMessage = self?.viewModel.errorMessage {
-                    self?.showAlert(title: "错误", message: errorMessage)
+                guard let self = self, self.isViewLoaded else { return }
+                if showingError, let errorMessage = self.viewModel.errorMessage {
+                    self.showAlert(title: "错误", message: errorMessage)
                 }
             }
             .store(in: &cancellables)
@@ -476,7 +504,8 @@ class WorkSessionViewController: BaseViewController {
         viewModel.$sessionState
             .receive(on: DispatchQueue.main)
             .sink { [weak self] sessionState in
-                self?.handleSessionStateChange(sessionState)
+                guard let self = self, self.isViewLoaded else { return }
+                self.handleSessionStateChange(sessionState)
             }
             .store(in: &cancellables)
     }
@@ -569,6 +598,148 @@ class WorkSessionViewController: BaseViewController {
         }
     }
     
+    // MARK: - App Lifecycle Management
+    
+    private func registerAppLifecycleNotifications() {
+        // 监听应用进入后台通知
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(appDidEnterBackground),
+            name: UIApplication.didEnterBackgroundNotification,
+            object: nil
+        )
+        
+        // 监听应用即将进入前台通知
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(appWillEnterForeground),
+            name: UIApplication.willEnterForegroundNotification,
+            object: nil
+        )
+        
+        // 监听应用变为活跃状态通知
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(appDidBecomeActive),
+            name: UIApplication.didBecomeActiveNotification,
+            object: nil
+        )
+        
+        // 监听应用即将失去活跃状态通知
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(appWillResignActive),
+            name: UIApplication.willResignActiveNotification,
+            object: nil
+        )
+        
+        // 监听内存警告通知
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(didReceiveMemoryWarningNotification),
+            name: UIApplication.didReceiveMemoryWarningNotification,
+            object: nil
+        )
+    }
+    
+    private func unregisterAppLifecycleNotifications() {
+        NotificationCenter.default.removeObserver(self, name: UIApplication.didEnterBackgroundNotification, object: nil)
+        NotificationCenter.default.removeObserver(self, name: UIApplication.willEnterForegroundNotification, object: nil)
+        NotificationCenter.default.removeObserver(self, name: UIApplication.didBecomeActiveNotification, object: nil)
+        NotificationCenter.default.removeObserver(self, name: UIApplication.willResignActiveNotification, object: nil)
+        NotificationCenter.default.removeObserver(self, name: UIApplication.didReceiveMemoryWarningNotification, object: nil)
+    }
+    
+    // MARK: - App Lifecycle Handlers
+    
+    @objc private func appDidEnterBackground() {
+        print("📱 应用进入后台 - 暂停摄像头会话")
+        
+        // 应用进入后台时暂停摄像头会话以节省电池和资源
+        pauseCameraSession()
+        
+        // 移除动画以节省资源
+        removePulseAnimation()
+        
+        // 显示状态消息
+        showCameraStatusMessage("应用已进入后台", isError: false)
+    }
+    
+    @objc private func appWillEnterForeground() {
+        print("📱 应用即将进入前台 - 准备恢复摄像头会话")
+        
+        // 应用即将进入前台时准备恢复摄像头会话
+        // 但不立即启动，等待应用完全激活
+        showCameraStatusMessage("正在恢复摄像头...", isError: false)
+    }
+    
+    @objc private func appDidBecomeActive() {
+        print("📱 应用变为活跃状态 - 恢复摄像头会话")
+        
+        // 应用变为活跃状态时恢复摄像头会话
+        if shouldShowCameraPreview() {
+            // 延迟一点时间以确保UI完全准备好
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+                self?.resumeCameraSession()
+            }
+        }
+        
+        // 2秒后隐藏状态消息
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
+            self?.hideCameraStatusMessage()
+        }
+    }
+    
+    @objc private func appWillResignActive() {
+        print("📱 应用即将失去活跃状态 - 暂停摄像头会话")
+        
+        // 应用即将失去活跃状态时暂停摄像头会话
+        // 这可能是由于来电、控制中心等临时中断
+        pauseCameraSession()
+    }
+    
+
+    
+    // MARK: - Memory Management
+    
+    private func handleMemoryWarning() {
+        // 停止摄像头预览以释放内存
+        if captureSession.isRunning {
+            print("⚠️ 内存警告：停止摄像头会话")
+            stopCameraPreview()
+            
+            // 显示内存警告状态
+            showCameraStatusMessage("内存不足，已暂停摄像头", isError: true)
+            
+            // 5秒后尝试恢复（如果内存情况改善）
+            DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) { [weak self] in
+                guard let self = self else { return }
+                
+                if self.shouldShowCameraPreview() {
+                    print("⚠️ 内存警告后尝试恢复摄像头")
+                    self.startCameraPreview()
+                    self.showCameraStatusMessage("摄像头已恢复", isError: false)
+                    
+                    // 2秒后隐藏状态消息
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                        self.hideCameraStatusMessage()
+                    }
+                }
+            }
+        }
+        
+        // 移除所有动画以节省内存
+        removePulseAnimation()
+        centerImageView.layer.removeAllAnimations()
+        
+        // 清理不必要的缓存
+        if let previewLayer = previewLayer, !shouldShowCameraPreview() {
+            previewLayer.removeFromSuperlayer()
+            self.previewLayer = nil
+            print("⚠️ 内存警告：移除预览层")
+        }
+    }
+    
     @objc private func cameraSessionWasInterrupted(_ notification: Notification) {
         guard let userInfo = notification.userInfo,
               let reasonIntegerValue = userInfo[AVCaptureSessionInterruptionReasonKey] as? Int,
@@ -630,8 +801,11 @@ class WorkSessionViewController: BaseViewController {
             
             // 尝试重新启动会话
             if error.code == .mediaServicesWereReset {
-                self?.sessionQueue.async {
-                    self?.captureSession.startRunning()
+                self?.sessionQueue.async { [weak self] in
+                    guard let self = self else { return }
+                    if self.shouldShowCameraPreview() {
+                        self.captureSession.startRunning()
+                    }
                 }
             }
         }
@@ -639,7 +813,29 @@ class WorkSessionViewController: BaseViewController {
     
     @MainActor
     deinit {
+        print("🗑️ WorkSessionViewController: 开始释放资源")
+        
+        // 停止摄像头会话
+        sessionQueue.async { [captureSession] in
+            if captureSession.isRunning {
+                captureSession.stopRunning()
+            }
+        }
+        
+        // 移除预览层
+        previewLayer?.removeFromSuperlayer()
+        previewLayer = nil
+        
+        // 移除所有动画
+        centerImageView.layer.removeAllAnimations()
+        
+        // 取消所有Combine订阅
+        cancellables.removeAll()
+        
+        // 移除所有通知观察者
         NotificationCenter.default.removeObserver(self)
+        
+        print("🗑️ WorkSessionViewController: 资源释放完成")
     }
     
     // MARK: - UI Update Methods
@@ -1018,6 +1214,21 @@ class WorkSessionViewController: BaseViewController {
         }
     }
     
+    override func didReceiveMemoryWarning() {
+        super.didReceiveMemoryWarning()
+        print("⚠️ 视图控制器收到内存警告")
+        
+        // 调用内存警告处理方法
+        handleMemoryWarning()
+    }
+    
+    @objc private func didReceiveMemoryWarningNotification() {
+        print("⚠️ 收到内存警告通知 - 释放摄像头资源")
+        
+        // 收到内存警告时释放摄像头资源
+        handleMemoryWarning()
+    }
+    
     private func setupCircularTimerContainer() {
         // 设置圆形形状
         timerContainerView.layer.cornerRadius = timerContainerView.bounds.width / 2
@@ -1078,8 +1289,8 @@ class WorkSessionViewController: BaseViewController {
             
             guard let frontDevice = discovery.devices.first else {
                 print("📷 找不到前置摄像头")
-                DispatchQueue.main.async {
-                    self.showCameraStatusMessage("找不到前置摄像头", isError: true)
+                DispatchQueue.main.async { [weak self] in
+                    self?.showCameraStatusMessage("找不到前置摄像头", isError: true)
                 }
                 self.captureSession.commitConfiguration()
                 return
@@ -1112,8 +1323,8 @@ class WorkSessionViewController: BaseViewController {
                 }
             } catch {
                 print("📷 创建摄像头输入失败：", error)
-                DispatchQueue.main.async {
-                    self.showCameraStatusMessage("摄像头初始化失败", isError: true)
+                DispatchQueue.main.async { [weak self] in
+                    self?.showCameraStatusMessage("摄像头初始化失败", isError: true)
                 }
                 self.captureSession.commitConfiguration()
                 return
@@ -1163,6 +1374,45 @@ class WorkSessionViewController: BaseViewController {
         }
     }
     
+    private func pauseCameraSession() {
+        sessionQueue.async { [weak self] in
+            guard let self = self else { return }
+            
+            if self.captureSession.isRunning {
+                self.captureSession.stopRunning()
+                print("📷 摄像头会话已暂停")
+                
+                DispatchQueue.main.async {
+                    // 移除脉冲动画但保持预览层
+                    self.removePulseAnimation()
+                }
+            }
+        }
+    }
+    
+    private func resumeCameraSession() {
+        guard shouldShowCameraPreview() else {
+            print("📷 不需要恢复摄像头会话")
+            return
+        }
+        
+        sessionQueue.async { [weak self] in
+            guard let self = self else { return }
+            
+            if !self.captureSession.isRunning {
+                self.captureSession.startRunning()
+                print("📷 摄像头会话已恢复")
+                
+                DispatchQueue.main.async {
+                    // 恢复脉冲动画
+                    if self.previewLayer != nil {
+                        self.addPulseAnimation()
+                    }
+                }
+            }
+        }
+    }
+    
     private func setupCameraPreviewLayer() {
         guard previewLayer == nil else {
             print("📷 预览层已存在，跳过设置")
@@ -1203,7 +1453,7 @@ class WorkSessionViewController: BaseViewController {
         centerImageView.layer.insertSublayer(previewLayer, at: 0)
         
         // 更新边框颜色以指示摄像头激活状态
-        updateCenterImageViewBorder(isActive: true)
+//        updateCenterImageViewBorder(isActive: true)
         
         print("📷 摄像头预览层设置完成")
     }
