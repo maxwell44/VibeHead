@@ -251,6 +251,10 @@ class WorkSessionViewController: BaseViewController {
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         updateUI()
+        // 视图出现时检查是否需要恢复摄像头预览
+        if shouldShowCameraPreview() && previewLayer == nil {
+            updateCenterImageViewState()
+        }
     }
     
     override func viewWillDisappear(_ animated: Bool) {
@@ -407,6 +411,14 @@ class WorkSessionViewController: BaseViewController {
                 if showingError, let errorMessage = self?.viewModel.errorMessage {
                     self?.showAlert(title: "错误", message: errorMessage)
                 }
+            }
+            .store(in: &cancellables)
+        
+        // 监听会话状态变化以同步摄像头状态
+        viewModel.$sessionState
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] sessionState in
+                self?.handleSessionStateChange(sessionState)
             }
             .store(in: &cancellables)
     }
@@ -628,8 +640,10 @@ class WorkSessionViewController: BaseViewController {
             confirmTitle: "重置"
         ) {
             viewModel.resetSession()
-            // 重置后更新摄像头状态
-            self.updateCenterImageViewState()
+            // 重置后切换回静态图片
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                self.updateCenterImageViewState()
+            }
         }
     }
     
@@ -669,19 +683,23 @@ class WorkSessionViewController: BaseViewController {
                 showCameraPermissionAlert()
             } else {
                 viewModel.startWorkSession()
-                // 启动会话后更新摄像头状态
-                updateCenterImageViewState()
+                // 启动会话后立即切换到摄像头预览
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    self.updateCenterImageViewState()
+                }
             }
         case .running:
             viewModel.pauseSession()
-            // 暂停时保持摄像头预览
+            // 暂停时保持摄像头预览，不需要切换状态
         case .paused:
             viewModel.resumeSession()
-            // 恢复时保持摄像头预览
+            // 恢复时保持摄像头预览，不需要切换状态
         case .error:
             viewModel.resetSession()
             // 重置时切换回静态图片
-            updateCenterImageViewState()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                self.updateCenterImageViewState()
+            }
         }
     }
     
@@ -995,6 +1013,34 @@ class WorkSessionViewController: BaseViewController {
         }
     }
     
+    // MARK: - Session State Management
+    
+    private func handleSessionStateChange(_ sessionState: WorkSessionViewModel.SessionState) {
+        print("📷 会话状态变化: \(sessionState)")
+        
+        // 根据会话状态变化更新摄像头状态
+        switch sessionState {
+        case .running:
+            // 会话开始时启动摄像头预览
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                self.updateCenterImageViewState()
+            }
+        case .idle, .completed:
+            // 会话结束或重置时停止摄像头预览
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                self.updateCenterImageViewState()
+            }
+        case .paused:
+            // 暂停时保持摄像头预览状态
+            break
+        case .error:
+            // 错误状态时停止摄像头预览
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                self.updateCenterImageViewState()
+            }
+        }
+    }
+    
     // MARK: - Camera State Management
     
     private func shouldShowCameraPreview() -> Bool {
@@ -1008,15 +1054,25 @@ class WorkSessionViewController: BaseViewController {
     }
     
     private func updateCenterImageViewState() {
+        guard let viewModel = viewModel else { return }
+        
+        print("📷 更新centerImageView状态 - 会话状态: \(viewModel.sessionState), 权限状态: \(AVCaptureDevice.authorizationStatus(for: .video).rawValue)")
+        
         if shouldShowCameraPreview() {
             // 如果当前没有显示摄像头预览，则切换到摄像头预览
             if previewLayer == nil {
+                print("📷 切换到摄像头预览模式")
                 transitionToCamera()
+            } else {
+                print("📷 摄像头预览已激活，保持当前状态")
             }
         } else {
             // 如果当前显示摄像头预览，则切换到静态图片
             if previewLayer != nil {
+                print("📷 切换到静态图片模式")
                 stopCameraPreview()
+            } else {
+                print("📷 静态图片已显示，保持当前状态")
             }
         }
     }
