@@ -63,6 +63,7 @@ class WorkSessionViewModel: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     private var lastCompletedSessionId: UUID?
     let statisticsService: StatisticsServiceProtocol
+    private let errorHandlingService = ErrorHandlingService()
     
     // MARK: - Session States
     enum SessionState: Equatable {
@@ -104,6 +105,21 @@ class WorkSessionViewModel: ObservableObject {
             .autoconnect()
             .sink { [weak self] _ in
                 self?.updateSessionState()
+            }
+            .store(in: &cancellables)
+        
+        // Monitor error handling service
+        errorHandlingService.$currentError
+            .sink { [weak self] error in
+                if let error = error {
+                    self?.handleServiceError(error)
+                }
+            }
+            .store(in: &cancellables)
+        
+        errorHandlingService.$isInGracefulDegradationMode
+            .sink { [weak self] isInDegradation in
+                self?.handleGracefulDegradationChange(isInDegradation)
             }
             .store(in: &cancellables)
     }
@@ -200,8 +216,10 @@ class WorkSessionViewModel: ObservableObject {
         
         if granted {
             print("摄像头权限已获得")
+            clearError()
         } else {
-            showError("需要摄像头权限来检测体态。您可以在设置中启用摄像头权限，或选择仅使用计时器功能。")
+            let error = HealthyCodeError.cameraPermissionDenied
+            errorHandlingService.reportError(error, source: .camera)
         }
     }
     
@@ -279,6 +297,38 @@ class WorkSessionViewModel: ObservableObject {
     private func clearError() {
         errorMessage = nil
         showingError = false
+        errorHandlingService.clearCurrentError()
+    }
+    
+    private func handleServiceError(_ error: HealthyCodeError) {
+        let message = error.localizedDescription
+        
+        switch error {
+        case .cameraPermissionDenied:
+            showError("摄像头权限被拒绝。应用将以仅计时器模式运行。")
+            
+        case .cameraNotAvailable:
+            showError("摄像头不可用。请检查是否被其他应用占用。")
+            
+        case .visionFrameworkError:
+            showError("体态检测遇到问题。正在尝试恢复...")
+            
+        case .dataCorruption:
+            showError("数据损坏。建议重置应用设置。")
+            
+        default:
+            showError(message)
+        }
+    }
+    
+    private func handleGracefulDegradationChange(_ isInDegradation: Bool) {
+        if isInDegradation {
+            print("应用进入优雅降级模式")
+            // Continue with limited functionality
+        } else {
+            print("应用恢复正常模式")
+            clearError()
+        }
     }
     
     // MARK: - Settings Management
@@ -323,6 +373,33 @@ class WorkSessionViewModel: ObservableObject {
     func shouldShowPostureWarning() -> Bool {
         let threshold = pomodoroService.settings.badPostureWarningThreshold
         return getCurrentBadPostureDuration() >= threshold && !currentPosture.isHealthy
+    }
+    
+    // MARK: - Error Handling Methods
+    
+    /// 获取错误处理服务的摘要
+    func getErrorSummary() -> ErrorSummary {
+        return errorHandlingService.getErrorSummary()
+    }
+    
+    /// 获取最近的错误记录
+    func getRecentErrors() -> [ErrorRecord] {
+        return errorHandlingService.getRecentErrors()
+    }
+    
+    /// 是否处于优雅降级模式
+    var isInGracefulDegradationMode: Bool {
+        return errorHandlingService.isInGracefulDegradationMode
+    }
+    
+    /// 手动报告错误
+    func reportError(_ error: HealthyCodeError, source: ErrorSource) {
+        errorHandlingService.reportError(error, source: source)
+    }
+    
+    /// 清除错误历史
+    func clearErrorHistory() {
+        errorHandlingService.clearErrorHistory()
     }
 }
 

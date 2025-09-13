@@ -17,7 +17,13 @@ class PostureDetectionService: NSObject, PostureDetectionServiceProtocol {
     private let cameraService = CameraService()
     private let feedbackService = FeedbackService()
     private var postureWarningService: PostureWarningService?
+    private var performanceMonitor: PerformanceMonitorService?
     private var cancellables = Set<AnyCancellable>()
+    
+    // Performance optimization
+    private var lastProcessingTime: CFTimeInterval = 0
+    private var processingInterval: TimeInterval = 1.0 / 15.0 // Default 15fps
+    private var frameSkipCounter = 0
     
     // Vision Framework components
     private let faceDetectionRequest = VNDetectFaceRectanglesRequest()
@@ -42,6 +48,7 @@ class PostureDetectionService: NSObject, PostureDetectionServiceProtocol {
         setupCameraService()
         observeCameraPermission()
         setupWarningService()
+        setupPerformanceMonitoring()
     }
     
     // MARK: - Setup
@@ -85,6 +92,43 @@ class PostureDetectionService: NSObject, PostureDetectionServiceProtocol {
         }
     }
     
+    private func setupPerformanceMonitoring() {
+        performanceMonitor = PerformanceMonitorService()
+        
+        // Monitor performance changes
+        performanceMonitor?.$recommendedFrameRate
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] frameRate in
+                self?.updateProcessingInterval(frameRate)
+            }
+            .store(in: &cancellables)
+        
+        // Listen for cleanup notifications
+        NotificationCenter.default.publisher(for: .performanceCleanupRequired)
+            .sink { [weak self] _ in
+                self?.performMemoryCleanup()
+            }
+            .store(in: &cancellables)
+    }
+    
+    private func updateProcessingInterval(_ frameRate: Double) {
+        processingInterval = 1.0 / frameRate
+        print("Posture detection processing interval updated to: \(processingInterval)s")
+    }
+    
+    private func performMemoryCleanup() {
+        // Clear posture history if memory is low
+        if postureHistory.count > 100 {
+            // Keep only recent 50 records
+            postureHistory = Array(postureHistory.suffix(50))
+        }
+        
+        // Clear cached face observations
+        lastFaceObservation = nil
+        
+        print("Posture detection service memory cleanup performed")
+    }
+    
     private func handlePostureWarning(_ posture: PostureType) {
         let settings = AppSettings.default
         feedbackService.playPostureWarning(
@@ -103,16 +147,83 @@ class PostureDetectionService: NSObject, PostureDetectionServiceProtocol {
     // MARK: - Public Interface
     
     func startDetection() {
+        do {
+            try validateDetectionRequirements()
+            
+            isDetecting = true
+            currentPostureStartTime = Date()
+            cameraService.startSession()
+            
+            print("Posture detection started")
+        } catch {
+            handleDetectionError(error)
+        }
+    }
+    
+    private func validateDetectionRequirements() throws {
         guard cameraPermissionStatus == .authorized else {
-            print("Cannot start detection: camera permission not granted")
-            return
+            throw HealthyCodeError.cameraPermissionDenied
         }
         
-        isDetecting = true
-        currentPostureStartTime = Date()
-        cameraService.startSession()
+        guard isPostureDetectionSupported() else {
+            throw HealthyCodeError.visionFrameworkError(
+                NSError(domain: "VisionFramework", code: -1, userInfo: [
+                    NSLocalizedDescriptionKey: "设备不支持体态检测功能"
+                ])
+            )
+        }
+    }
+    
+    private func handleDetectionError(_ error: Error) {
+        let healthyCodeError: HealthyCodeError
         
-        print("Posture detection started")
+        if let hcError = error as? HealthyCodeError {
+            healthyCodeError = hcError
+        } else {
+            healthyCodeError = .visionFrameworkError(error)
+        }
+        
+        DispatchQueue.main.async { [weak self] in
+            print("Detection error: \(healthyCodeError.localizedDescription)")
+            
+            // Graceful degradation - continue with timer-only mode
+            self?.handleGracefulDegradation(healthyCodeError)
+            
+            // Notify UI about the error
+            NotificationCenter.default.post(
+                name: .postureDetectionErrorOccurred,
+                object: healthyCodeError
+            )
+        }
+    }
+    
+    private func handleGracefulDegradation(_ error: HealthyCodeError) {
+        switch error {
+        case .cameraPermissionDenied:
+            // Continue with timer-only mode
+            print("Continuing in timer-only mode due to camera permission denial")
+            
+        case .cameraNotAvailable:
+            // Retry after a delay
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
+                self?.retryDetection()
+            }
+            
+        case .visionFrameworkError:
+            // Reduce processing complexity
+            processingInterval = min(processingInterval * 2.0, 2.0)
+            print("Reduced processing complexity due to Vision Framework error")
+            
+        default:
+            break
+        }
+    }
+    
+    private func retryDetection() {
+        guard !isDetecting else { return }
+        
+        print("Retrying posture detection...")
+        startDetection()
     }
     
     func stopDetection() {
@@ -131,6 +242,11 @@ class PostureDetectionService: NSObject, PostureDetectionServiceProtocol {
         
         await MainActor.run {
             self.cameraPermissionStatus = self.cameraService.authorizationStatus
+            
+            // Handle permission result
+            if !granted {
+                self.handleDetectionError(HealthyCodeError.cameraPermissionDenied)
+            }
         }
         
         return granted
@@ -141,12 +257,38 @@ class PostureDetectionService: NSObject, PostureDetectionServiceProtocol {
     private func processVideoFrame(_ sampleBuffer: CMSampleBuffer) {
         guard isDetecting else { return }
         
+        // Apply performance-based frame throttling
+        let currentTime = CACurrentMediaTime()
+        guard currentTime - lastProcessingTime >= processingInterval else {
+            frameSkipCounter += 1
+            return
+        }
+        
+        lastProcessingTime = currentTime
+        
+        // Check if we should reduce processing based on performance
+        if let settings = performanceMonitor?.optimizeForCurrentConditions(),
+           !settings.enableAdvancedFeatures {
+            // Skip every other frame for better performance
+            frameSkipCounter += 1
+            if frameSkipCounter % 2 != 0 {
+                return
+            }
+        }
+        
         guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
             return
         }
         
-        // Create Vision request
-        let requests: [VNRequest] = [faceDetectionRequest, faceLandmarksRequest]
+        // Create Vision request - use fewer requests if performance is constrained
+        let requests: [VNRequest]
+        if let settings = performanceMonitor?.optimizeForCurrentConditions(),
+           settings.enableAdvancedFeatures {
+            requests = [faceDetectionRequest, faceLandmarksRequest]
+        } else {
+            // Use only basic face detection for better performance
+            requests = [faceDetectionRequest]
+        }
         
         // Process the frame
         do {
@@ -157,14 +299,54 @@ class PostureDetectionService: NSObject, PostureDetectionServiceProtocol {
                 handleFaceDetectionResults(faceResults)
             }
             
-            // Handle landmarks results for more detailed analysis
-            if let landmarkResults = faceLandmarksRequest.results as? [VNFaceObservation] {
+            // Handle landmarks results for more detailed analysis (if enabled)
+            if requests.count > 1,
+               let landmarkResults = faceLandmarksRequest.results as? [VNFaceObservation] {
                 handleFaceLandmarksResults(landmarkResults)
             }
             
         } catch {
             print("Vision processing error: \(error)")
+            // Handle Vision Framework errors gracefully
+            handleVisionError(error)
         }
+    }
+    
+    private func handleVisionError(_ error: Error) {
+        let visionError = HealthyCodeError.visionFrameworkError(error)
+        
+        // Log the error but continue operation
+        print("Vision Framework error: \(visionError.localizedDescription)")
+        
+        // Reduce processing frequency temporarily
+        processingInterval = min(processingInterval * 1.5, 1.0) // Max 1 second interval
+        
+        // Notify about the error but don't stop detection
+        DispatchQueue.main.async { [weak self] in
+            print("Vision processing temporarily reduced due to error")
+            
+            // Post notification for UI to show warning
+            NotificationCenter.default.post(
+                name: .visionProcessingErrorOccurred,
+                object: visionError
+            )
+            
+            // Try to recover after a delay
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) { [weak self] in
+                self?.attemptVisionRecovery()
+            }
+        }
+    }
+    
+    private func attemptVisionRecovery() {
+        // Reset processing interval to normal
+        if let frameRate = performanceMonitor?.recommendedFrameRate {
+            processingInterval = 1.0 / frameRate
+        } else {
+            processingInterval = 1.0 / 15.0 // Default
+        }
+        
+        print("Attempting Vision Framework recovery")
     }
     
     private func handleFaceDetectionResults(_ faces: [VNFaceObservation]) {
@@ -427,4 +609,11 @@ extension PostureDetectionService: AVCaptureVideoDataOutputSampleBufferDelegate 
         // Handle dropped frames if needed
         print("Frame dropped")
     }
+}
+
+// MARK: - Notification Extensions
+
+extension Notification.Name {
+    static let postureDetectionErrorOccurred = Notification.Name("postureDetectionErrorOccurred")
+    static let visionProcessingErrorOccurred = Notification.Name("visionProcessingErrorOccurred")
 }

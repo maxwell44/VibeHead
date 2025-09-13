@@ -6,11 +6,19 @@ class CameraService: NSObject, ObservableObject {
     @Published var authorizationStatus: AVAuthorizationStatus = .notDetermined
     @Published var isSessionRunning = false
     @Published var previewLayer: AVCaptureVideoPreviewLayer?
+    @Published var currentFrameRate: Double = 15.0
     
     private let captureSession = AVCaptureSession()
     private let sessionQueue = DispatchQueue(label: "camera.session.queue")
     private var videoDeviceInput: AVCaptureDeviceInput?
     private var videoDataOutput: AVCaptureVideoDataOutput?
+    private var performanceMonitor: PerformanceMonitorService?
+    private var cancellables = Set<AnyCancellable>()
+    
+    // Frame rate control
+    private var targetFrameRate: Double = 15.0
+    private var lastFrameTime: CFTimeInterval = 0
+    private let frameRateQueue = DispatchQueue(label: "camera.framerate.queue")
     
     // Delegate for processing video frames
     weak var frameDelegate: AVCaptureVideoDataOutputSampleBufferDelegate?
@@ -19,6 +27,76 @@ class CameraService: NSObject, ObservableObject {
         super.init()
         checkCameraPermission()
         setupCaptureSession()
+        setupPerformanceMonitoring()
+    }
+    
+    // MARK: - Performance Monitoring Setup
+    
+    private func setupPerformanceMonitoring() {
+        performanceMonitor = PerformanceMonitorService()
+        
+        // Monitor performance changes
+        performanceMonitor?.$recommendedFrameRate
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] newFrameRate in
+                self?.updateFrameRate(newFrameRate)
+            }
+            .store(in: &cancellables)
+        
+        // Listen for cleanup notifications
+        NotificationCenter.default.publisher(for: .performanceCleanupRequired)
+            .sink { [weak self] _ in
+                self?.performMemoryCleanup()
+            }
+            .store(in: &cancellables)
+    }
+    
+    private func updateFrameRate(_ newFrameRate: Double) {
+        guard newFrameRate != targetFrameRate else { return }
+        
+        targetFrameRate = newFrameRate
+        currentFrameRate = newFrameRate
+        
+        sessionQueue.async { [weak self] in
+            self?.configureFrameRate(newFrameRate)
+        }
+        
+        print("Camera frame rate updated to: \(newFrameRate)fps")
+    }
+    
+    private func configureFrameRate(_ frameRate: Double) {
+        guard let device = videoDeviceInput?.device else { return }
+        
+        do {
+            try device.lockForConfiguration()
+            
+            // Find the best format for the desired frame rate
+            let format = device.activeFormat
+            let ranges = format.videoSupportedFrameRateRanges
+            
+            if let range = ranges.first(where: { $0.maxFrameRate >= frameRate }) {
+                let clampedFrameRate = min(frameRate, range.maxFrameRate)
+                device.activeVideoMinFrameDuration = CMTimeMake(value: 1, timescale: Int32(clampedFrameRate))
+                device.activeVideoMaxFrameDuration = CMTimeMake(value: 1, timescale: Int32(clampedFrameRate))
+            }
+            
+            device.unlockForConfiguration()
+        } catch {
+            print("Error configuring frame rate: \(error)")
+        }
+    }
+    
+    private func performMemoryCleanup() {
+        sessionQueue.async { [weak self] in
+            // Clear any cached frames or buffers
+            self?.videoDataOutput?.alwaysDiscardsLateVideoFrames = true
+            
+            // Force garbage collection
+            DispatchQueue.main.async {
+                // Trigger memory cleanup
+                print("Performing camera service memory cleanup")
+            }
+        }
     }
     
     // MARK: - Permission Handling
@@ -37,6 +115,20 @@ class CameraService: NSObject, ObservableObject {
         return status
     }
     
+    func handleCameraPermissionDenied() -> HealthyCodeError {
+        return .cameraPermissionDenied
+    }
+    
+    func validateCameraAvailability() throws {
+        guard AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .front) != nil else {
+            throw HealthyCodeError.cameraNotAvailable
+        }
+        
+        guard authorizationStatus == .authorized else {
+            throw HealthyCodeError.cameraPermissionDenied
+        }
+    }
+    
     // MARK: - Session Setup
     
     private func setupCaptureSession() {
@@ -46,8 +138,10 @@ class CameraService: NSObject, ObservableObject {
     }
     
     private func configureCaptureSession() {
-        guard authorizationStatus == .authorized else {
-            print("Camera permission not granted")
+        do {
+            try validateCameraAvailability()
+        } catch {
+            handleCameraError(error)
             return
         }
         
@@ -58,19 +152,43 @@ class CameraService: NSObject, ObservableObject {
             captureSession.sessionPreset = .medium
         }
         
-        // Setup video input (front camera)
-        setupVideoInput()
-        
-        // Setup video output
-        setupVideoOutput()
-        
-        // Setup preview layer
-        setupPreviewLayer()
-        
-        captureSession.commitConfiguration()
+        do {
+            // Setup video input (front camera)
+            try setupVideoInput()
+            
+            // Setup video output
+            try setupVideoOutput()
+            
+            // Setup preview layer
+            setupPreviewLayer()
+            
+            captureSession.commitConfiguration()
+        } catch {
+            captureSession.commitConfiguration()
+            handleCameraError(error)
+        }
     }
     
-    private func setupVideoInput() {
+    private func handleCameraError(_ error: Error) {
+        let healthyCodeError: HealthyCodeError
+        
+        if let hcError = error as? HealthyCodeError {
+            healthyCodeError = hcError
+        } else {
+            healthyCodeError = .cameraNotAvailable
+        }
+        
+        DispatchQueue.main.async {
+            print("Camera error: \(healthyCodeError.localizedDescription)")
+            // Post notification for UI to handle graceful degradation
+            NotificationCenter.default.post(
+                name: .cameraErrorOccurred,
+                object: healthyCodeError
+            )
+        }
+    }
+    
+    private func setupVideoInput() throws {
         // Remove existing input if any
         if let currentInput = videoDeviceInput {
             captureSession.removeInput(currentInput)
@@ -80,42 +198,52 @@ class CameraService: NSObject, ObservableObject {
         guard let frontCamera = AVCaptureDevice.default(.builtInWideAngleCamera, 
                                                        for: .video, 
                                                        position: .front) else {
-            print("Front camera not available")
-            return
+            throw HealthyCodeError.cameraNotAvailable
         }
         
         do {
             let videoInput = try AVCaptureDeviceInput(device: frontCamera)
             
-            if captureSession.canAddInput(videoInput) {
-                captureSession.addInput(videoInput)
-                videoDeviceInput = videoInput
+            guard captureSession.canAddInput(videoInput) else {
+                throw HealthyCodeError.cameraNotAvailable
             }
+            
+            captureSession.addInput(videoInput)
+            videoDeviceInput = videoInput
         } catch {
-            print("Error creating video input: \(error)")
+            if error is HealthyCodeError {
+                throw error
+            } else {
+                throw HealthyCodeError.cameraNotAvailable
+            }
         }
     }
     
-    private func setupVideoOutput() {
+    private func setupVideoOutput() throws {
         videoDataOutput = AVCaptureVideoDataOutput()
         
-        guard let videoOutput = videoDataOutput else { return }
+        guard let videoOutput = videoDataOutput else {
+            throw HealthyCodeError.cameraNotAvailable
+        }
         
-        // Configure video output settings
+        // Configure video output settings for optimal performance
         videoOutput.videoSettings = [
             kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA
         ]
         
-        // Set frame rate to 15fps for battery optimization
+        // Optimize for performance and battery life
         videoOutput.alwaysDiscardsLateVideoFrames = true
         
-        if captureSession.canAddOutput(videoOutput) {
-            captureSession.addOutput(videoOutput)
-            
-            // Set delegate for frame processing
-            let videoQueue = DispatchQueue(label: "camera.video.queue")
-            videoOutput.setSampleBufferDelegate(frameDelegate, queue: videoQueue)
+        // Set sample buffer delegate with frame rate control
+        guard captureSession.canAddOutput(videoOutput) else {
+            throw HealthyCodeError.cameraNotAvailable
         }
+        
+        captureSession.addOutput(videoOutput)
+        
+        // Set delegate for frame processing with throttling
+        let videoQueue = DispatchQueue(label: "camera.video.queue", qos: .userInitiated)
+        videoOutput.setSampleBufferDelegate(self, queue: videoQueue)
     }
     
     private func setupPreviewLayer() {
@@ -132,8 +260,10 @@ class CameraService: NSObject, ObservableObject {
     // MARK: - Session Control
     
     func startSession() {
-        guard authorizationStatus == .authorized else {
-            print("Cannot start session: camera permission not granted")
+        do {
+            try validateCameraAvailability()
+        } catch {
+            handleCameraError(error)
             return
         }
         
@@ -145,6 +275,11 @@ class CameraService: NSObject, ObservableObject {
                 
                 DispatchQueue.main.async {
                     self.isSessionRunning = self.captureSession.isRunning
+                    
+                    // Verify session actually started
+                    if !self.isSessionRunning {
+                        self.handleCameraError(HealthyCodeError.cameraNotAvailable)
+                    }
                 }
             }
         }
@@ -168,10 +303,50 @@ class CameraService: NSObject, ObservableObject {
     
     func setFrameDelegate(_ delegate: AVCaptureVideoDataOutputSampleBufferDelegate?) {
         frameDelegate = delegate
+    }
+    
+    // MARK: - Frame Rate Control
+    
+    private func shouldProcessFrame() -> Bool {
+        let currentTime = CACurrentMediaTime()
+        let targetInterval = 1.0 / targetFrameRate
         
-        if let videoOutput = videoDataOutput {
-            let videoQueue = DispatchQueue(label: "camera.video.queue")
-            videoOutput.setSampleBufferDelegate(delegate, queue: videoQueue)
+        if currentTime - lastFrameTime >= targetInterval {
+            lastFrameTime = currentTime
+            return true
+        }
+        
+        return false
+    }
+    
+    func getCurrentPerformanceSettings() -> PerformanceSettings? {
+        return performanceMonitor?.optimizeForCurrentConditions()
+    }
+}
+
+// MARK: - AVCaptureVideoDataOutputSampleBufferDelegate
+
+extension CameraService: AVCaptureVideoDataOutputSampleBufferDelegate {
+    func captureOutput(_ output: AVCaptureOutput, 
+                      didOutput sampleBuffer: CMSampleBuffer, 
+                      from connection: AVCaptureConnection) {
+        
+        // Apply frame rate throttling
+        guard shouldProcessFrame() else { return }
+        
+        // Update performance monitor
+        performanceMonitor?.updateCurrentFrameRate(currentFrameRate)
+        
+        // Forward to the actual frame delegate
+        frameDelegate?.captureOutput?(output, didOutput: sampleBuffer, from: connection)
+    }
+    
+    func captureOutput(_ output: AVCaptureOutput, 
+                      didDrop sampleBuffer: CMSampleBuffer, 
+                      from connection: AVCaptureConnection) {
+        // Handle dropped frames
+        if let delegate = frameDelegate {
+            delegate.captureOutput?(output, didDrop: sampleBuffer, from: connection)
         }
     }
 }
@@ -201,4 +376,10 @@ extension AVAuthorizationStatus {
             return "未知状态"
         }
     }
+}
+
+// MARK: - Notification Extensions
+
+extension Notification.Name {
+    static let cameraErrorOccurred = Notification.Name("cameraErrorOccurred")
 }
