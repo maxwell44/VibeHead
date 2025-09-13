@@ -9,16 +9,49 @@ struct CameraPreviewView: UIViewRepresentable {
         view.backgroundColor = UIColor.black
         
         if let previewLayer = previewLayer {
+            // 确保预览层没有父层
+            previewLayer.removeFromSuperlayer()
+            
+            // 设置预览层属性
             previewLayer.frame = view.bounds
+            previewLayer.videoGravity = .resizeAspectFill
+            
+            // 添加到视图层
             view.layer.addSublayer(previewLayer)
+            
+            // 确保连接启用
+            previewLayer.connection?.isEnabled = true
+            
+            print("🎥 CameraPreviewView: Preview layer added to view")
+            print("🎥 CameraPreviewView: Connection enabled: \(previewLayer.connection?.isEnabled ?? false)")
+            print("🎥 CameraPreviewView: Session running: \(previewLayer.session?.isRunning ?? false)")
+        } else {
+            print("🎥 CameraPreviewView: No preview layer provided")
         }
         
         return view
     }
     
     func updateUIView(_ uiView: UIView, context: Context) {
-        if let previewLayer = previewLayer {
-            previewLayer.frame = uiView.bounds
+        guard let previewLayer = previewLayer else { return }
+        
+        // 更新frame
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        previewLayer.frame = uiView.bounds
+        CATransaction.commit()
+        
+        // 确保预览层在正确的位置
+        if previewLayer.superlayer != uiView.layer {
+            previewLayer.removeFromSuperlayer()
+            uiView.layer.addSublayer(previewLayer)
+            print("🎥 CameraPreviewView: Preview layer re-added to view")
+        }
+        
+        // 确保连接启用
+        if let connection = previewLayer.connection, !connection.isEnabled {
+            connection.isEnabled = true
+            print("🎥 CameraPreviewView: Re-enabled preview layer connection")
         }
     }
 }

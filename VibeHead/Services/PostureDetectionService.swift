@@ -143,8 +143,10 @@ class PostureDetectionService: NSObject, PostureDetectionServiceProtocol {
         // Additional setup when camera permission is granted
         print("Camera permission granted, detection ready")
         
-        // Start camera preview automatically when permission is granted
-        cameraService.startPreviewOnly()
+        // 延迟启动预览，确保UI已准备好
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+            self?.cameraService.startPreviewOnly()
+        }
     }
     
     // MARK: - Public Interface
@@ -594,6 +596,16 @@ class PostureDetectionService: NSObject, PostureDetectionServiceProtocol {
     
     func getCurrentBadPostureDuration() -> TimeInterval {
         return postureWarningService?.currentBadPostureDuration ?? 0
+    }
+    
+    // MARK: - Debug Methods
+    
+    func debugCameraStatus() {
+        cameraService.debugCameraStatus()
+    }
+    
+    func restartCamera() {
+        cameraService.restartCameraSession()
     }
 }
 

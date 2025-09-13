@@ -8,7 +8,7 @@ class CameraService: NSObject, ObservableObject {
     @Published var previewLayer: AVCaptureVideoPreviewLayer?
     @Published var currentFrameRate: Double = 15.0
     
-    private let captureSession = AVCaptureSession()
+    let captureSession = AVCaptureSession()
     private let sessionQueue = DispatchQueue(label: "camera.session.queue")
     private var videoDeviceInput: AVCaptureDeviceInput?
     private var videoDataOutput: AVCaptureVideoDataOutput?
@@ -25,6 +25,14 @@ class CameraService: NSObject, ObservableObject {
     
     override init() {
         super.init()
+        
+        // Check if running on simulator
+        #if targetEnvironment(simulator)
+        print("🎥 ⚠️ Running on iOS Simulator - Camera functionality will be limited")
+        #else
+        print("🎥 Running on physical device - Camera should work normally")
+        #endif
+        
         checkCameraPermission()
         setupCaptureSession()
         setupPerformanceMonitoring()
@@ -124,6 +132,8 @@ class CameraService: NSObject, ObservableObject {
         sessionQueue.async { [weak self] in
             guard let self = self else { return }
             
+            print("🎥 Setting up camera session after permission granted...")
+            
             self.captureSession.beginConfiguration()
             
             do {
@@ -135,10 +145,17 @@ class CameraService: NSObject, ObservableObject {
                 
                 self.captureSession.commitConfiguration()
                 
-                print("Camera session configured successfully after permission granted")
+                print("🎥 Camera session configured successfully after permission granted")
                 
-                // Start preview immediately after configuration
+                // 确保预览层连接到正确的会话
                 DispatchQueue.main.async {
+                    if let previewLayer = self.previewLayer {
+                        previewLayer.session = self.captureSession
+                        previewLayer.connection?.isEnabled = true
+                        print("🎥 Preview layer reconnected to session")
+                    }
+                    
+                    // Start preview immediately after configuration
                     self.startPreviewOnly()
                 }
             } catch {
@@ -181,7 +198,7 @@ class CameraService: NSObject, ObservableObject {
             captureSession.sessionPreset = .medium
         }
         
-        // Always setup preview layer
+        // Always setup preview layer first
         setupPreviewLayer()
         
         // Only setup input/output if we have permission
@@ -194,12 +211,16 @@ class CameraService: NSObject, ObservableObject {
                 try setupVideoOutput()
                 
                 captureSession.commitConfiguration()
+                
+                print("🎥 Session configured successfully with permission")
+                
             } catch {
                 captureSession.commitConfiguration()
                 handleCameraError(error)
             }
         } else {
             captureSession.commitConfiguration()
+            print("🎥 Session configured without camera input (no permission yet)")
         }
     }
     
@@ -228,23 +249,52 @@ class CameraService: NSObject, ObservableObject {
             captureSession.removeInput(currentInput)
         }
         
+        // List all available cameras for debugging
+        let discoverySession = AVCaptureDevice.DiscoverySession(
+            deviceTypes: [.builtInWideAngleCamera],
+            mediaType: .video,
+            position: .unspecified
+        )
+        
+        print("🎥 Available camera devices:")
+        for device in discoverySession.devices {
+            print("🎥   - \(device.localizedName) (position: \(device.position.rawValue))")
+        }
+        
         // Get front camera
         guard let frontCamera = AVCaptureDevice.default(.builtInWideAngleCamera, 
                                                        for: .video, 
                                                        position: .front) else {
+            print("🎥 ❌ No front camera found!")
+            
+            // Try any available camera as fallback
+            if let anyCamera = discoverySession.devices.first {
+                print("🎥 Using fallback camera: \(anyCamera.localizedName)")
+                try setupVideoInputWithDevice(anyCamera)
+                return
+            }
+            
             throw HealthyCodeError.cameraNotAvailable
         }
         
+        print("🎥 ✅ Using front camera: \(frontCamera.localizedName)")
+        try setupVideoInputWithDevice(frontCamera)
+    }
+    
+    private func setupVideoInputWithDevice(_ device: AVCaptureDevice) throws {
         do {
-            let videoInput = try AVCaptureDeviceInput(device: frontCamera)
+            let videoInput = try AVCaptureDeviceInput(device: device)
             
             guard captureSession.canAddInput(videoInput) else {
+                print("🎥 ❌ Cannot add video input to session")
                 throw HealthyCodeError.cameraNotAvailable
             }
             
             captureSession.addInput(videoInput)
             videoDeviceInput = videoInput
+            print("🎥 ✅ Video input added successfully")
         } catch {
+            print("🎥 ❌ Error creating video input: \(error)")
             if error is HealthyCodeError {
                 throw error
             } else {
@@ -287,25 +337,107 @@ class CameraService: NSObject, ObservableObject {
             let previewLayer = AVCaptureVideoPreviewLayer(session: self.captureSession)
             previewLayer.videoGravity = .resizeAspectFill
             
+            // 确保预览层连接正确
+            if let connection = previewLayer.connection {
+                if connection.isVideoOrientationSupported {
+                    connection.videoOrientation = .portrait
+                }
+                print("🎥 Preview layer connection configured: \(connection.isEnabled)")
+            }
+            
             self.previewLayer = previewLayer
+            
+            print("🎥 Preview layer created successfully")
+            print("🎥 Session has inputs: \(self.captureSession.inputs.count)")
+            print("🎥 Session has outputs: \(self.captureSession.outputs.count)")
+            print("🎥 Session is running: \(self.captureSession.isRunning)")
+            print("🎥 Preview layer connection: \(previewLayer.connection?.isEnabled ?? false)")
         }
     }
     
     // MARK: - Session Control
     
     func startPreviewOnly() {
+        print("🎥 Starting preview only...")
+        
         // Start session for preview only, without validation
         sessionQueue.async { [weak self] in
             guard let self = self else { return }
             
+            print("🎥 Session queue: checking if session is running: \(self.captureSession.isRunning)")
+            print("🎥 Session inputs: \(self.captureSession.inputs.count)")
+            print("🎥 Session outputs: \(self.captureSession.outputs.count)")
+            
+            // 确保会话配置正确
+            if self.captureSession.inputs.isEmpty && self.authorizationStatus == .authorized {
+                print("🎥 No inputs found, reconfiguring session...")
+                self.configureCaptureSession()
+            }
+            
             if !self.captureSession.isRunning {
+                print("🎥 Starting capture session...")
                 self.captureSession.startRunning()
                 
-                DispatchQueue.main.async {
+                // 等待一小段时间确保会话完全启动
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                     self.isSessionRunning = self.captureSession.isRunning
-                    print("Camera preview session started: \(self.isSessionRunning)")
+                    print("🎥 Camera preview session started: \(self.isSessionRunning)")
+                    
+                    if self.isSessionRunning {
+                        print("🎥 ✅ Session is now running successfully!")
+                        
+                        // 强制更新预览层
+                        if let previewLayer = self.previewLayer {
+                            print("🎥 Refreshing preview layer connection...")
+                            previewLayer.connection?.isEnabled = true
+                        }
+                    } else {
+                        print("🎥 ❌ Session failed to start!")
+                        // 尝试重新配置
+                        self.sessionQueue.async {
+                            self.reconfigureSession()
+                        }
+                    }
+                }
+            } else {
+                print("🎥 Session was already running")
+                DispatchQueue.main.async {
+                    self.isSessionRunning = true
                 }
             }
+        }
+    }
+    
+    private func reconfigureSession() {
+        print("🎥 Attempting to reconfigure session...")
+        
+        captureSession.beginConfiguration()
+        
+        // 移除所有现有的输入和输出
+        for input in captureSession.inputs {
+            captureSession.removeInput(input)
+        }
+        for output in captureSession.outputs {
+            captureSession.removeOutput(output)
+        }
+        
+        do {
+            // 重新设置输入和输出
+            try setupVideoInput()
+            try setupVideoOutput()
+            
+            captureSession.commitConfiguration()
+            
+            print("🎥 Session reconfigured successfully")
+            
+            // 重新启动会话
+            if !captureSession.isRunning {
+                captureSession.startRunning()
+            }
+            
+        } catch {
+            captureSession.commitConfiguration()
+            print("🎥 Failed to reconfigure session: \(error)")
         }
     }
     
@@ -371,6 +503,62 @@ class CameraService: NSObject, ObservableObject {
     
     func getCurrentPerformanceSettings() -> PerformanceSettings? {
         return performanceMonitor?.optimizeForCurrentConditions()
+    }
+    
+    // MARK: - Debug Methods
+    
+    func debugCameraStatus() {
+        print("🎥 === Camera Debug Status ===")
+        print("🎥 Authorization Status: \(authorizationStatus.localizedDescription)")
+        print("🎥 Session Running: \(captureSession.isRunning)")
+        print("🎥 Session Inputs: \(captureSession.inputs.count)")
+        print("🎥 Session Outputs: \(captureSession.outputs.count)")
+        print("🎥 Preview Layer: \(previewLayer != nil ? "✅" : "❌")")
+        
+        if let previewLayer = previewLayer {
+            print("🎥 Preview Layer Session: \(previewLayer.session === captureSession ? "✅" : "❌")")
+            print("🎥 Preview Layer Connection: \(previewLayer.connection?.isEnabled ?? false ? "✅" : "❌")")
+            print("🎥 Preview Layer Frame: \(previewLayer.frame)")
+        }
+        
+        // 检查输入设备
+        for input in captureSession.inputs {
+            if let deviceInput = input as? AVCaptureDeviceInput {
+                print("🎥 Input Device: \(deviceInput.device.localizedName)")
+                print("🎥 Input Device Position: \(deviceInput.device.position.rawValue)")
+            }
+        }
+        
+        print("🎥 === End Debug Status ===")
+    }
+    
+    func restartCameraSession() {
+        print("🎥 Manually restarting camera session...")
+        
+        sessionQueue.async { [weak self] in
+            guard let self = self else { return }
+            
+            if self.captureSession.isRunning {
+                self.captureSession.stopRunning()
+            }
+            
+            // 等待一下再重启
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                self.sessionQueue.async {
+                    self.captureSession.startRunning()
+                    
+                    DispatchQueue.main.async {
+                        self.isSessionRunning = self.captureSession.isRunning
+                        print("🎥 Manual restart result: \(self.isSessionRunning)")
+                        
+                        // 强制刷新预览层
+                        if let previewLayer = self.previewLayer {
+                            previewLayer.connection?.isEnabled = true
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 

@@ -13,6 +13,8 @@ struct WorkSessionView: View {
     // MARK: - Properties
     @StateObject private var viewModel = WorkSessionViewModel()
     @State private var showingPermissionAlert = false
+    @State private var showCameraTest = false
+    @State private var showDirectCameraTest = false
     
     // MARK: - Body
     var body: some View {
@@ -39,6 +41,12 @@ struct WorkSessionView: View {
             }
             .sheet(isPresented: $viewModel.showingSettings) {
                 settingsSheet
+            }
+            .sheet(isPresented: $showCameraTest) {
+                CameraTestView()
+            }
+            .sheet(isPresented: $showDirectCameraTest) {
+                DirectCameraTestView()
             }
             .alert("摄像头权限", isPresented: $showingPermissionAlert) {
                 Button("设置") {
@@ -337,10 +345,22 @@ struct WorkSessionView: View {
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
         ToolbarItem(placement: .navigationBarLeading) {
-            Button("设置") {
-                viewModel.showSettings()
+            Menu {
+                Button("设置") {
+                    viewModel.showSettings()
+                }
+                
+                Button("摄像头测试") {
+                    showCameraTest = true
+                }
+                
+                Button("直接摄像头测试") {
+                    showDirectCameraTest = true
+                }
+            } label: {
+                Image(systemName: "ellipsis.circle")
+                    .foregroundColor(.primaryBlue)
             }
-            .foregroundColor(.primaryBlue)
         }
         
         ToolbarItem(placement: .navigationBarTrailing) {

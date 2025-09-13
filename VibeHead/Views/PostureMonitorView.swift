@@ -109,21 +109,42 @@ struct PostureMonitorView: View {
     
     /// 控制按钮
     private var controlButtons: some View {
-        HStack(spacing: 16) {
-            Button(action: toggleDetection) {
-                HStack {
-                    Image(systemName: postureDetectionService.isDetecting ? "stop.circle.fill" : "play.circle.fill")
-                    Text(postureDetectionService.isDetecting ? "停止检测" : "开始检测")
+        VStack(spacing: 12) {
+            HStack(spacing: 16) {
+                Button(action: toggleDetection) {
+                    HStack {
+                        Image(systemName: postureDetectionService.isDetecting ? "stop.circle.fill" : "play.circle.fill")
+                        Text(postureDetectionService.isDetecting ? "停止检测" : "开始检测")
+                    }
+                    .frame(maxWidth: .infinity)
                 }
-                .frame(maxWidth: .infinity)
+                .buttonStyle(.borderedProminent)
+                .disabled(postureDetectionService.cameraPermissionStatus != .authorized)
+                
+                Button(action: { showingSettings = true }) {
+                    Image(systemName: "gear")
+                }
+                .buttonStyle(.bordered)
             }
-            .buttonStyle(.borderedProminent)
-            .disabled(postureDetectionService.cameraPermissionStatus != .authorized)
             
-            Button(action: { showingSettings = true }) {
-                Image(systemName: "gear")
+            // 调试按钮（仅在摄像头权限已授权但没有画面时显示）
+            if postureDetectionService.cameraPermissionStatus == .authorized {
+                HStack(spacing: 8) {
+                    Button("调试摄像头") {
+                        postureDetectionService.debugCameraStatus()
+                    }
+                    .font(.caption)
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    
+                    Button("重启摄像头") {
+                        postureDetectionService.restartCamera()
+                    }
+                    .font(.caption)
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
             }
-            .buttonStyle(.bordered)
         }
     }
     
