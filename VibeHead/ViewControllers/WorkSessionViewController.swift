@@ -138,7 +138,40 @@ class WorkSessionViewController: BaseViewController {
         imageView.isUserInteractionEnabled = true
         imageView.layer.cornerRadius = 140 // 280/2 = 140，设置为圆形
         imageView.clipsToBounds = true
+        // 添加边框以增强视觉效果
+        imageView.layer.borderWidth = 3
+        imageView.layer.borderColor = UIColor.systemGray5.cgColor
         return imageView
+    }()
+    
+    // 加载状态指示器
+    private let loadingIndicator: UIActivityIndicatorView = {
+        let indicator = UIActivityIndicatorView(style: .large)
+        indicator.color = .white
+        indicator.hidesWhenStopped = true
+        indicator.layer.shadowColor = UIColor.black.cgColor
+        indicator.layer.shadowOffset = CGSize(width: 0, height: 2)
+        indicator.layer.shadowOpacity = 0.8
+        indicator.layer.shadowRadius = 4
+        return indicator
+    }()
+    
+    // 摄像头状态标签
+    private let cameraStatusLabel: UILabel = {
+        let label = UILabel()
+        label.text = ""
+        label.font = .systemFont(ofSize: 12, weight: .medium)
+        label.textColor = .white
+        label.textAlignment = .center
+        label.backgroundColor = UIColor.black.withAlphaComponent(0.6)
+        label.layer.cornerRadius = 12
+        label.clipsToBounds = true
+        label.isHidden = true
+        label.layer.shadowColor = UIColor.black.cgColor
+        label.layer.shadowOffset = CGSize(width: 0, height: 1)
+        label.layer.shadowOpacity = 0.8
+        label.layer.shadowRadius = 2
+        return label
     }()
     
     // progressView 已移除，使用圆形进度环替代
@@ -195,7 +228,18 @@ class WorkSessionViewController: BaseViewController {
         button.tintColor = .white
         button.backgroundColor = .healthyGreen
         button.layer.cornerRadius = 25
-        button.imageEdgeInsets = UIEdgeInsets(top: 0, left: -8, bottom: 0, right: 0)
+        // Use configuration for iOS 15+ or imageEdgeInsets for older versions
+        if #available(iOS 15.0, *) {
+            var config = UIButton.Configuration.filled()
+            config.title = "开始工作"
+            config.image = UIImage(systemName: "play.fill")
+            config.imagePadding = 8
+            config.baseBackgroundColor = .healthyGreen
+            config.baseForegroundColor = .white
+            button.configuration = config
+        } else {
+            button.imageEdgeInsets = UIEdgeInsets(top: 0, left: -8, bottom: 0, right: 0)
+        }
         return button
     }()
     
@@ -288,6 +332,8 @@ class WorkSessionViewController: BaseViewController {
         timerContainerView.addSubview(centerImageView) // 先添加背景图片
         timerContainerView.addSubview(timerLabel)      // 再添加文字，确保在上层
         timerContainerView.addSubview(timerStatusLabel)
+        timerContainerView.addSubview(loadingIndicator) // 添加加载指示器
+        timerContainerView.addSubview(cameraStatusLabel) // 添加摄像头状态标签
         
         // 添加圆形进度环
         timerContainerView.layer.addSublayer(progressBackgroundRingLayer)
@@ -369,6 +415,17 @@ class WorkSessionViewController: BaseViewController {
         centerImageView.snp.makeConstraints { make in
             make.center.equalToSuperview()
             make.width.height.equalTo(280) // 和 timerContainerView 一样大
+        }
+        
+        loadingIndicator.snp.makeConstraints { make in
+            make.center.equalToSuperview()
+        }
+        
+        cameraStatusLabel.snp.makeConstraints { make in
+            make.bottom.equalTo(centerImageView.snp.bottom).offset(-16)
+            make.centerX.equalToSuperview()
+            make.height.equalTo(24)
+            make.width.greaterThanOrEqualTo(80)
         }
         
         // 会话信息区域约束 - 已移除
@@ -457,6 +514,131 @@ class WorkSessionViewController: BaseViewController {
     private func setupCameraIntegration() {
         print("📷 开始设置摄像头集成")
         checkPermissionAndSetup()
+        setupCameraNotifications()
+    }
+    
+    private func setupCameraNotifications() {
+        // 监听摄像头会话中断通知
+        if #available(iOS 18.0, *) {
+            NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(cameraSessionWasInterrupted(_:)),
+                name: AVCaptureSession.wasInterruptedNotification,
+                object: captureSession
+            )
+            
+            // 监听摄像头会话中断结束通知
+            NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(cameraSessionInterruptionEnded(_:)),
+                name: AVCaptureSession.interruptionEndedNotification,
+                object: captureSession
+            )
+            
+            // 监听摄像头会话运行时错误通知
+            NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(cameraSessionRuntimeError(_:)),
+                name: AVCaptureSession.runtimeErrorNotification,
+                object: captureSession
+            )
+        } else {
+            NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(cameraSessionWasInterrupted(_:)),
+                name: .AVCaptureSessionWasInterrupted,
+                object: captureSession
+            )
+            
+            // 监听摄像头会话中断结束通知
+            NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(cameraSessionInterruptionEnded(_:)),
+                name: .AVCaptureSessionInterruptionEnded,
+                object: captureSession
+            )
+            
+            // 监听摄像头会话运行时错误通知
+            NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(cameraSessionRuntimeError(_:)),
+                name: .AVCaptureSessionRuntimeError,
+                object: captureSession
+            )
+        }
+    }
+    
+    @objc private func cameraSessionWasInterrupted(_ notification: Notification) {
+        guard let userInfo = notification.userInfo,
+              let reasonIntegerValue = userInfo[AVCaptureSessionInterruptionReasonKey] as? Int,
+              let reason = AVCaptureSession.InterruptionReason(rawValue: reasonIntegerValue) else {
+            return
+        }
+        
+        print("📷 摄像头会话被中断: \(reason)")
+        
+        DispatchQueue.main.async { [weak self] in
+            switch reason {
+            case .videoDeviceNotAvailableInBackground:
+                self?.showCameraStatusMessage("应用进入后台", isError: false)
+            case .audioDeviceInUseByAnotherClient, .videoDeviceInUseByAnotherClient:
+                self?.showCameraStatusMessage("摄像头被其他应用占用", isError: true)
+            case .videoDeviceNotAvailableWithMultipleForegroundApps:
+                self?.showCameraStatusMessage("多应用模式下摄像头不可用", isError: true)
+            case .videoDeviceNotAvailableDueToSystemPressure:
+                self?.showCameraStatusMessage("系统压力过大，摄像头暂停", isError: true)
+            case .sensitiveContentMitigationActivated:
+                self?.showCameraStatusMessage("敏感内容缓解已激活", isError: true)
+            @unknown default:
+                self?.showCameraStatusMessage("摄像头会话中断", isError: true)
+            }
+            
+            // 移除脉冲动画
+            self?.removePulseAnimation()
+        }
+    }
+    
+    @objc private func cameraSessionInterruptionEnded(_ notification: Notification) {
+        print("📷 摄像头会话中断结束")
+        
+        DispatchQueue.main.async { [weak self] in
+            self?.showCameraStatusMessage("摄像头已恢复", isError: false)
+            
+            // 如果应该显示摄像头预览，重新添加脉冲动画
+            if self?.shouldShowCameraPreview() == true {
+                self?.addPulseAnimation()
+            }
+            
+            // 2秒后隐藏状态消息
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                self?.hideCameraStatusMessage()
+            }
+        }
+    }
+    
+    @objc private func cameraSessionRuntimeError(_ notification: Notification) {
+        guard let error = notification.userInfo?[AVCaptureSessionErrorKey] as? AVError else {
+            return
+        }
+        
+        print("📷 摄像头会话运行时错误: \(error)")
+        
+        DispatchQueue.main.async { [weak self] in
+            self?.showCameraStatusMessage("摄像头错误: \(error.localizedDescription)", isError: true)
+            self?.removePulseAnimation()
+            
+            // 尝试重新启动会话
+            if error.code == .mediaServicesWereReset {
+                self?.sessionQueue.async {
+                    self?.captureSession.startRunning()
+                }
+            }
+        }
+    }
+    
+    @MainActor
+    deinit {
+        NotificationCenter.default.removeObserver(self)
     }
     
     // MARK: - UI Update Methods
@@ -824,7 +1006,11 @@ class WorkSessionViewController: BaseViewController {
         
         // 更新摄像头预览层的frame以匹配centerImageView
         if let previewLayer = previewLayer {
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
             previewLayer.frame = centerImageView.bounds
+            previewLayer.cornerRadius = centerImageView.layer.cornerRadius
+            CATransaction.commit()
         }
     }
     
@@ -870,10 +1056,16 @@ class WorkSessionViewController: BaseViewController {
             guard let self = self else { return }
             
             self.captureSession.beginConfiguration()
-            self.captureSession.sessionPreset = .photo
+            
+            // 设置会话预设为高质量
+            if self.captureSession.canSetSessionPreset(.high) {
+                self.captureSession.sessionPreset = .high
+            } else {
+                self.captureSession.sessionPreset = .photo
+            }
             
             // 找到前置摄像头
-            let deviceTypes: [AVCaptureDevice.DeviceType] = [.builtInWideAngleCamera, .builtInTrueDepthCamera]
+            let deviceTypes: [AVCaptureDevice.DeviceType] = [.builtInTrueDepthCamera, .builtInWideAngleCamera]
             let discovery = AVCaptureDevice.DiscoverySession(
                 deviceTypes: deviceTypes,
                 mediaType: .video,
@@ -882,6 +1074,9 @@ class WorkSessionViewController: BaseViewController {
             
             guard let frontDevice = discovery.devices.first else {
                 print("📷 找不到前置摄像头")
+                DispatchQueue.main.async {
+                    self.showCameraStatusMessage("找不到前置摄像头", isError: true)
+                }
                 self.captureSession.commitConfiguration()
                 return
             }
@@ -890,9 +1085,32 @@ class WorkSessionViewController: BaseViewController {
                 let input = try AVCaptureDeviceInput(device: frontDevice)
                 if self.captureSession.canAddInput(input) {
                     self.captureSession.addInput(input)
+                    
+                    // 配置摄像头设备属性以获得更好的视觉效果
+                    try frontDevice.lockForConfiguration()
+                    
+                    // 设置自动对焦模式
+                    if frontDevice.isFocusModeSupported(.continuousAutoFocus) {
+                        frontDevice.focusMode = .continuousAutoFocus
+                    }
+                    
+                    // 设置自动曝光模式
+                    if frontDevice.isExposureModeSupported(.continuousAutoExposure) {
+                        frontDevice.exposureMode = .continuousAutoExposure
+                    }
+                    
+                    // 设置自动白平衡
+                    if frontDevice.isWhiteBalanceModeSupported(.continuousAutoWhiteBalance) {
+                        frontDevice.whiteBalanceMode = .continuousAutoWhiteBalance
+                    }
+                    
+                    frontDevice.unlockForConfiguration()
                 }
             } catch {
                 print("📷 创建摄像头输入失败：", error)
+                DispatchQueue.main.async {
+                    self.showCameraStatusMessage("摄像头初始化失败", isError: true)
+                }
                 self.captureSession.commitConfiguration()
                 return
             }
@@ -905,6 +1123,7 @@ class WorkSessionViewController: BaseViewController {
     private func startCameraPreview() {
         guard AVCaptureDevice.authorizationStatus(for: .video) == .authorized else {
             print("📷 摄像头权限未授权，无法启动预览")
+            showCameraStatusMessage("摄像头权限未授权", isError: true)
             return
         }
         
@@ -916,7 +1135,8 @@ class WorkSessionViewController: BaseViewController {
                 print("📷 摄像头预览已启动")
                 
                 DispatchQueue.main.async {
-                    self.setupCameraPreviewLayer()
+                    // 添加脉冲动画表示摄像头激活
+                    self.addPulseAnimation()
                 }
             }
         }
@@ -931,6 +1151,8 @@ class WorkSessionViewController: BaseViewController {
                 print("📷 摄像头预览已停止")
                 
                 DispatchQueue.main.async {
+                    // 移除脉冲动画
+                    self.removePulseAnimation()
                     self.transitionToStaticImage()
                 }
             }
@@ -946,6 +1168,7 @@ class WorkSessionViewController: BaseViewController {
         previewLayer = AVCaptureVideoPreviewLayer(session: captureSession)
         guard let previewLayer = previewLayer else {
             print("📷 创建预览层失败")
+            showCameraStatusMessage("摄像头初始化失败", isError: true)
             return
         }
         
@@ -953,25 +1176,30 @@ class WorkSessionViewController: BaseViewController {
         previewLayer.videoGravity = .resizeAspectFill
         previewLayer.frame = centerImageView.bounds
         
-        // 设置视频方向 - 向左旋转90度以匹配CameraTestViewController
+        // 设置视频方向 - 确保正确的方向显示
         if let connection = previewLayer.connection {
             if #available(iOS 17.0, *) {
-                if connection.isVideoRotationAngleSupported(270) {
-                    connection.videoRotationAngle = 90 // 向左旋转90度
+                // 使用新的旋转角度API
+                if connection.isVideoRotationAngleSupported(90) {
+                    connection.videoRotationAngle = 90 // 向左旋转90度以匹配CameraTestViewController
                 }
             } else {
+                // 使用旧的视频方向API
                 if connection.isVideoOrientationSupported {
                     connection.videoOrientation = .landscapeRight // 向左旋转90度
                 }
             }
         }
         
-        // 确保圆形裁剪效果
+        // 确保圆形裁剪效果和边框
         previewLayer.cornerRadius = centerImageView.layer.cornerRadius
         previewLayer.masksToBounds = true
         
-        // 将预览层添加到centerImageView
-        centerImageView.layer.addSublayer(previewLayer)
+        // 添加预览层到centerImageView的最底层
+        centerImageView.layer.insertSublayer(previewLayer, at: 0)
+        
+        // 更新边框颜色以指示摄像头激活状态
+        updateCenterImageViewBorder(isActive: true)
         
         print("📷 摄像头预览层设置完成")
     }
@@ -979,37 +1207,84 @@ class WorkSessionViewController: BaseViewController {
     private func transitionToCamera() {
         guard AVCaptureDevice.authorizationStatus(for: .video) == .authorized else {
             print("📷 摄像头权限未授权，无法切换到摄像头预览")
+            showCameraStatusMessage("摄像头权限未授权", isError: true)
             return
         }
         
         print("📷 开始切换到摄像头预览")
         
+        // 显示加载状态
+        showLoadingState(true)
+        showCameraStatusMessage("正在启动摄像头...", isError: false)
+        
         // 启动摄像头预览
         startCameraPreview()
         
-        // 执行切换动画
-        UIView.transition(with: centerImageView, duration: 0.5, options: .transitionCrossDissolve) { [weak self] in
-            // 隐藏静态图片，显示摄像头预览
-            self?.centerImageView.image = nil
-            self?.setupCameraPreviewLayer()
-        } completion: { _ in
-            print("📷 切换到摄像头预览完成")
+        // 延迟执行切换动画，给摄像头启动一些时间
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+            guard let self = self else { return }
+            
+            // 执行平滑的切换动画
+            UIView.animate(withDuration: 0.8, delay: 0, usingSpringWithDamping: 0.8, initialSpringVelocity: 0.2, options: [.curveEaseInOut]) {
+                // 缩放效果
+                self.centerImageView.transform = CGAffineTransform(scaleX: 1.05, y: 1.05)
+            } completion: { _ in
+                UIView.transition(with: self.centerImageView, duration: 0.6, options: [.transitionCrossDissolve, .allowUserInteraction]) {
+                    // 隐藏静态图片，显示摄像头预览
+                    self.centerImageView.image = nil
+                    self.setupCameraPreviewLayer()
+                } completion: { _ in
+                    UIView.animate(withDuration: 0.4, delay: 0.1, usingSpringWithDamping: 0.7, initialSpringVelocity: 0.3) {
+                        // 恢复正常大小
+                        self.centerImageView.transform = .identity
+                    } completion: { _ in
+                        self.showLoadingState(false)
+                        self.showCameraStatusMessage("摄像头已激活", isError: false)
+                        
+                        // 2秒后隐藏状态消息
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                            self.hideCameraStatusMessage()
+                        }
+                        
+                        print("📷 切换到摄像头预览完成")
+                    }
+                }
+            }
         }
     }
     
     private func transitionToStaticImage() {
         print("📷 开始切换到静态图片")
         
-        // 执行切换动画
-        UIView.transition(with: centerImageView, duration: 0.3, options: .transitionCrossDissolve) { [weak self] in
-            // 移除预览层
-            self?.previewLayer?.removeFromSuperlayer()
-            self?.previewLayer = nil
-            
-            // 恢复静态图片
-            self?.centerImageView.image = UIImage(named: "a1")
+        // 显示加载状态
+        showLoadingState(true)
+        showCameraStatusMessage("正在停止摄像头...", isError: false)
+        
+        // 执行平滑的切换动画
+        UIView.animate(withDuration: 0.6, delay: 0, usingSpringWithDamping: 0.8, initialSpringVelocity: 0.2, options: [.curveEaseInOut]) {
+            // 轻微缩放效果
+            self.centerImageView.transform = CGAffineTransform(scaleX: 0.95, y: 0.95)
         } completion: { _ in
-            print("📷 切换到静态图片完成")
+            UIView.transition(with: self.centerImageView, duration: 0.5, options: [.transitionCrossDissolve, .allowUserInteraction]) {
+                // 移除预览层
+                self.previewLayer?.removeFromSuperlayer()
+                self.previewLayer = nil
+                
+                // 恢复静态图片
+                self.centerImageView.image = UIImage(named: "a1")
+                
+                // 更新边框颜色
+                self.updateCenterImageViewBorder(isActive: false)
+            } completion: { _ in
+                UIView.animate(withDuration: 0.4, delay: 0.1, usingSpringWithDamping: 0.7, initialSpringVelocity: 0.3) {
+                    // 恢复正常大小
+                    self.centerImageView.transform = .identity
+                } completion: { _ in
+                    self.showLoadingState(false)
+                    self.hideCameraStatusMessage()
+                    print("📷 切换到静态图片完成")
+                }
+            }
         }
     }
     
@@ -1074,6 +1349,93 @@ class WorkSessionViewController: BaseViewController {
             } else {
                 print("📷 静态图片已显示，保持当前状态")
             }
+        }
+    }
+    
+    // MARK: - Visual Effects Helper Methods
+    
+    private func showLoadingState(_ show: Bool) {
+        DispatchQueue.main.async { [weak self] in
+            if show {
+                self?.loadingIndicator.startAnimating()
+            } else {
+                self?.loadingIndicator.stopAnimating()
+            }
+        }
+    }
+    
+    private func showCameraStatusMessage(_ message: String, isError: Bool) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            
+            self.cameraStatusLabel.text = "  \(message)  "
+            self.cameraStatusLabel.backgroundColor = isError ? 
+                UIColor.alertRed.withAlphaComponent(0.8) : 
+                UIColor.black.withAlphaComponent(0.7)
+            
+            // 显示动画
+            self.cameraStatusLabel.isHidden = false
+            self.cameraStatusLabel.alpha = 0
+            self.cameraStatusLabel.transform = CGAffineTransform(scaleX: 0.8, y: 0.8)
+            
+            UIView.animate(withDuration: 0.3, delay: 0, usingSpringWithDamping: 0.7, initialSpringVelocity: 0.5) {
+                self.cameraStatusLabel.alpha = 1
+                self.cameraStatusLabel.transform = .identity
+            }
+        }
+    }
+    
+    private func hideCameraStatusMessage() {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            
+            UIView.animate(withDuration: 0.3, delay: 0, options: [.curveEaseInOut]) {
+                self.cameraStatusLabel.alpha = 0
+                self.cameraStatusLabel.transform = CGAffineTransform(scaleX: 0.8, y: 0.8)
+            } completion: { _ in
+                self.cameraStatusLabel.isHidden = true
+                self.cameraStatusLabel.transform = .identity
+            }
+        }
+    }
+    
+    private func updateCenterImageViewBorder(isActive: Bool) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            
+            let borderColor = isActive ? UIColor.primaryBlue.cgColor : UIColor.systemGray5.cgColor
+            let borderWidth: CGFloat = isActive ? 4 : 3
+            
+            UIView.animate(withDuration: 0.3) {
+                self.centerImageView.layer.borderColor = borderColor
+                self.centerImageView.layer.borderWidth = borderWidth
+            }
+        }
+    }
+    
+    private func addPulseAnimation() {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            
+            // 移除现有动画
+            self.centerImageView.layer.removeAnimation(forKey: "pulse")
+            
+            // 创建脉冲动画
+            let pulseAnimation = CABasicAnimation(keyPath: "transform.scale")
+            pulseAnimation.duration = 2.0
+            pulseAnimation.fromValue = 1.0
+            pulseAnimation.toValue = 1.02
+            pulseAnimation.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            pulseAnimation.autoreverses = true
+            pulseAnimation.repeatCount = .infinity
+            
+            self.centerImageView.layer.add(pulseAnimation, forKey: "pulse")
+        }
+    }
+    
+    private func removePulseAnimation() {
+        DispatchQueue.main.async { [weak self] in
+            self?.centerImageView.layer.removeAnimation(forKey: "pulse")
         }
     }
 }
