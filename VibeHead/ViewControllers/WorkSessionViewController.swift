@@ -90,7 +90,7 @@ class WorkSessionViewController: BaseViewController {
         let layer = CAShapeLayer()
         layer.fillColor = UIColor.clear.cgColor
         layer.strokeColor = UIColor.primaryBlue.cgColor
-        layer.lineWidth = 8
+        layer.lineWidth = 6 // 稍微减小线宽，让外侧进度环更精致
         layer.lineCap = .round
         return layer
     }()
@@ -99,7 +99,7 @@ class WorkSessionViewController: BaseViewController {
         let layer = CAShapeLayer()
         layer.fillColor = UIColor.clear.cgColor
         layer.strokeColor = UIColor.systemGray5.cgColor
-        layer.lineWidth = 8
+        layer.lineWidth = 6 // 稍微减小线宽，让外侧进度环更精致
         layer.lineCap = .round
         return layer
     }()
@@ -329,15 +329,16 @@ class WorkSessionViewController: BaseViewController {
         
         // 计时器区域 - 圆形设计
         contentView.addSubview(timerContainerView)
-        timerContainerView.addSubview(centerImageView) // 先添加背景图片
+        
+        // 添加圆形进度环到timerContainerView的layer（在centerImageView外侧）
+        timerContainerView.layer.addSublayer(progressBackgroundRingLayer)
+        timerContainerView.layer.addSublayer(progressRingLayer)
+        
+        timerContainerView.addSubview(centerImageView) // 添加背景图片，在进度环内侧
         timerContainerView.addSubview(timerLabel)      // 再添加文字，确保在上层
         timerContainerView.addSubview(timerStatusLabel)
         timerContainerView.addSubview(loadingIndicator) // 添加加载指示器
         timerContainerView.addSubview(cameraStatusLabel) // 添加摄像头状态标签
-        
-        // 添加圆形进度环
-        timerContainerView.layer.addSublayer(progressBackgroundRingLayer)
-        timerContainerView.layer.addSublayer(progressRingLayer)
         
         // 添加点击手势
         let tapGesture = UITapGestureRecognizer(target: self, action: #selector(centerImageTapped))
@@ -395,11 +396,11 @@ class WorkSessionViewController: BaseViewController {
             make.bottom.equalToSuperview().offset(-16)
         }
         
-        // 计时器区域约束 - 圆形设计
+        // 计时器区域约束 - 圆形设计，容器需要更大以容纳外侧的进度圆环
         timerContainerView.snp.makeConstraints { make in
             make.top.equalTo(postureStatusContainerView.snp.bottom).offset(32)
             make.centerX.equalToSuperview()
-            make.width.height.equalTo(280)
+            make.width.height.equalTo(320) // 增大容器以容纳外侧进度圆环
             make.bottom.equalToSuperview().offset(-32)
         }
         
@@ -414,7 +415,7 @@ class WorkSessionViewController: BaseViewController {
         
         centerImageView.snp.makeConstraints { make in
             make.center.equalToSuperview()
-            make.width.height.equalTo(280) // 和 timerContainerView 一样大
+            make.width.height.equalTo(280) // centerImageView保持原来的大小
         }
         
         loadingIndicator.snp.makeConstraints { make in
@@ -690,10 +691,13 @@ class WorkSessionViewController: BaseViewController {
     }
     
     private func updateCircularProgress(progress: Double) {
-        // 使用 layer 自身的坐标系，中心点为 bounds 的中心
-        let layerBounds = progressRingLayer.bounds
-        let center = CGPoint(x: layerBounds.midX, y: layerBounds.midY)
-        let radius: CGFloat = min(layerBounds.width, layerBounds.height) / 2 - 20 // 留出一些边距
+        // 使用 timerContainerView 的坐标系，中心点为 bounds 的中心
+        let containerBounds = timerContainerView.bounds
+        let center = CGPoint(x: containerBounds.midX, y: containerBounds.midY)
+        
+        // 进度圆环的半径应该比centerImageView稍大，在其外侧
+        // centerImageView的半径是140，所以进度圆环的半径设为150
+        let radius: CGFloat = 150
         let startAngle = -CGFloat.pi / 2
         let endAngle = startAngle + 2 * CGFloat.pi
         
