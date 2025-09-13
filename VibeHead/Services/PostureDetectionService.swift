@@ -11,10 +11,12 @@ class PostureDetectionService: NSObject, PostureDetectionServiceProtocol {
     @Published var lastFaceObservation: VNFaceObservation?
     
     var previewLayer: AVCaptureVideoPreviewLayer? {
-        return cameraService.previewLayer
+        // TODO: Will be implemented when camera integration is moved to WorkSessionViewController
+        return nil
     }
     
-    private let cameraService = CameraService()
+    // TODO: CameraService removed - camera functionality will be integrated directly in WorkSessionViewController
+    // private let cameraService = CameraService()
     private let feedbackService = FeedbackService()
     private var postureWarningService: PostureWarningService?
     private var performanceMonitor: PerformanceMonitorService?
@@ -45,7 +47,8 @@ class PostureDetectionService: NSObject, PostureDetectionServiceProtocol {
     override init() {
         super.init()
         setupVisionRequests()
-        setupCameraService()
+        // TODO: Camera service setup removed - will be handled by WorkSessionViewController
+        // setupCameraService()
         observeCameraPermission()
         setupWarningService()
         setupPerformanceMonitoring()
@@ -61,15 +64,13 @@ class PostureDetectionService: NSObject, PostureDetectionServiceProtocol {
         faceLandmarksRequest.revision = VNDetectFaceLandmarksRequestRevision3
     }
     
+    // TODO: Camera service setup removed - will be handled by WorkSessionViewController
     private func setupCameraService() {
-        // Set this service as the frame delegate for camera
-        cameraService.setFrameDelegate(self)
+        // Camera service functionality will be integrated directly in WorkSessionViewController
+        // This method is kept for future reference but functionality is disabled
         
-        // Observe camera service state
-        cameraService.$authorizationStatus
-            .receive(on: DispatchQueue.main)
-            .assign(to: \.cameraPermissionStatus, on: self)
-            .store(in: &cancellables)
+        // Set initial camera permission status
+        cameraPermissionStatus = AVCaptureDevice.authorizationStatus(for: .video)
     }
     
     private func observeCameraPermission() {
@@ -143,10 +144,8 @@ class PostureDetectionService: NSObject, PostureDetectionServiceProtocol {
         // Additional setup when camera permission is granted
         print("Camera permission granted, detection ready")
         
-        // 延迟启动预览，确保UI已准备好
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
-            self?.cameraService.startPreviewOnly()
-        }
+        // TODO: Camera preview startup will be handled by WorkSessionViewController
+        // Camera service functionality has been moved to WorkSessionViewController
     }
     
     // MARK: - Public Interface
@@ -157,7 +156,8 @@ class PostureDetectionService: NSObject, PostureDetectionServiceProtocol {
             
             isDetecting = true
             currentPostureStartTime = Date()
-            cameraService.startSession()
+            // TODO: Camera session will be managed by WorkSessionViewController
+            // cameraService.startSession()
             
             print("Posture detection started")
         } catch {
@@ -233,7 +233,8 @@ class PostureDetectionService: NSObject, PostureDetectionServiceProtocol {
     
     func stopDetection() {
         isDetecting = false
-        cameraService.stopSession()
+        // TODO: Camera session will be managed by WorkSessionViewController
+        // cameraService.stopSession()
         postureWarningService?.stopMonitoring()
         
         // Record final posture if any
@@ -243,10 +244,11 @@ class PostureDetectionService: NSObject, PostureDetectionServiceProtocol {
     }
     
     func requestCameraPermission() async -> Bool {
-        let granted = await cameraService.requestCameraPermission()
+        // TODO: Camera permission will be handled by WorkSessionViewController
+        let granted = await AVCaptureDevice.requestAccess(for: .video)
         
         await MainActor.run {
-            self.cameraPermissionStatus = self.cameraService.authorizationStatus
+            self.cameraPermissionStatus = AVCaptureDevice.authorizationStatus(for: .video)
             
             // Handle permission result
             if !granted {
@@ -601,11 +603,13 @@ class PostureDetectionService: NSObject, PostureDetectionServiceProtocol {
     // MARK: - Debug Methods
     
     func debugCameraStatus() {
-        cameraService.debugCameraStatus()
+        // TODO: Camera debugging will be handled by WorkSessionViewController
+        print("Camera service functionality moved to WorkSessionViewController")
     }
     
     func restartCamera() {
-        cameraService.restartCameraSession()
+        // TODO: Camera restart will be handled by WorkSessionViewController
+        print("Camera service functionality moved to WorkSessionViewController")
     }
 }
 

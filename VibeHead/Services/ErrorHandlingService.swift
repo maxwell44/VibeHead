@@ -17,13 +17,14 @@ class ErrorHandlingService: ObservableObject {
     // MARK: - Error Monitoring Setup
     
     private func setupErrorMonitoring() {
-        // Monitor camera errors
-        NotificationCenter.default.publisher(for: .cameraErrorOccurred)
-            .compactMap { $0.object as? HealthyCodeError }
-            .sink { [weak self] error in
-                self?.handleError(error, source: .camera)
-            }
-            .store(in: &cancellables)
+        // TODO: Camera error monitoring will be handled by WorkSessionViewController
+        // Camera service functionality has been moved to WorkSessionViewController
+        // NotificationCenter.default.publisher(for: .cameraErrorOccurred)
+        //     .compactMap { $0.object as? HealthyCodeError }
+        //     .sink { [weak self] error in
+        //         self?.handleError(error, source: .camera)
+        //     }
+        //     .store(in: &cancellables)
         
         // Monitor posture detection errors
         NotificationCenter.default.publisher(for: .postureDetectionErrorOccurred)
