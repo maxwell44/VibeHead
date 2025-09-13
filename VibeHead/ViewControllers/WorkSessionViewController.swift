@@ -253,6 +253,14 @@ class WorkSessionViewController: BaseViewController {
         updateUI()
     }
     
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        // 当视图即将消失时，停止摄像头预览以节省资源
+        if previewLayer != nil {
+            stopCameraPreview()
+        }
+    }
+    
     // MARK: - Setup Methods
     
     private func setupUI() {
@@ -447,6 +455,7 @@ class WorkSessionViewController: BaseViewController {
         updatePostureStatus()
         updateControlButtons()
         updateNavigationBarButtons()
+        updateCenterImageViewState()
     }
     
     private func updateTimerDisplay() {
@@ -619,6 +628,8 @@ class WorkSessionViewController: BaseViewController {
             confirmTitle: "重置"
         ) {
             viewModel.resetSession()
+            // 重置后更新摄像头状态
+            self.updateCenterImageViewState()
         }
     }
     
@@ -658,13 +669,19 @@ class WorkSessionViewController: BaseViewController {
                 showCameraPermissionAlert()
             } else {
                 viewModel.startWorkSession()
+                // 启动会话后更新摄像头状态
+                updateCenterImageViewState()
             }
         case .running:
             viewModel.pauseSession()
+            // 暂停时保持摄像头预览
         case .paused:
             viewModel.resumeSession()
+            // 恢复时保持摄像头预览
         case .error:
             viewModel.resetSession()
+            // 重置时切换回静态图片
+            updateCenterImageViewState()
         }
     }
     
@@ -786,6 +803,11 @@ class WorkSessionViewController: BaseViewController {
             let progress = viewModel.getSessionProgress()
             updateCircularProgress(progress: progress)
         }
+        
+        // 更新摄像头预览层的frame以匹配centerImageView
+        if let previewLayer = previewLayer {
+            previewLayer.frame = centerImageView.bounds
+        }
     }
     
     private func setupCircularTimerContainer() {
@@ -891,24 +913,29 @@ class WorkSessionViewController: BaseViewController {
                 print("📷 摄像头预览已停止")
                 
                 DispatchQueue.main.async {
-                    self.removeCameraPreviewLayer()
+                    self.transitionToStaticImage()
                 }
             }
         }
     }
     
     private func setupCameraPreviewLayer() {
-        // 移除现有的预览层
-        removeCameraPreviewLayer()
+        guard previewLayer == nil else {
+            print("📷 预览层已存在，跳过设置")
+            return
+        }
         
-        // 创建新的预览层
         previewLayer = AVCaptureVideoPreviewLayer(session: captureSession)
-        guard let previewLayer = previewLayer else { return }
+        guard let previewLayer = previewLayer else {
+            print("📷 创建预览层失败")
+            return
+        }
         
+        // 设置预览层属性
         previewLayer.videoGravity = .resizeAspectFill
         previewLayer.frame = centerImageView.bounds
         
-        // 设置视频方向
+        // 设置视频方向 - 向左旋转90度以匹配CameraTestViewController
         if let connection = previewLayer.connection {
             if #available(iOS 17.0, *) {
                 if connection.isVideoRotationAngleSupported(270) {
@@ -921,23 +948,76 @@ class WorkSessionViewController: BaseViewController {
             }
         }
         
-        // 将预览层添加到centerImageView的layer中
+        // 确保圆形裁剪效果
+        previewLayer.cornerRadius = centerImageView.layer.cornerRadius
+        previewLayer.masksToBounds = true
+        
+        // 将预览层添加到centerImageView
         centerImageView.layer.addSublayer(previewLayer)
         
-        // 隐藏静态图片
-        centerImageView.image = nil
-        
-        print("📷 摄像头预览层已设置")
+        print("📷 摄像头预览层设置完成")
     }
     
-    private func removeCameraPreviewLayer() {
-        previewLayer?.removeFromSuperlayer()
-        previewLayer = nil
+    private func transitionToCamera() {
+        guard AVCaptureDevice.authorizationStatus(for: .video) == .authorized else {
+            print("📷 摄像头权限未授权，无法切换到摄像头预览")
+            return
+        }
         
-        // 恢复静态图片
-        centerImageView.image = UIImage(named: "a1")
+        print("📷 开始切换到摄像头预览")
         
-        print("📷 摄像头预览层已移除")
+        // 启动摄像头预览
+        startCameraPreview()
+        
+        // 执行切换动画
+        UIView.transition(with: centerImageView, duration: 0.5, options: .transitionCrossDissolve) { [weak self] in
+            // 隐藏静态图片，显示摄像头预览
+            self?.centerImageView.image = nil
+            self?.setupCameraPreviewLayer()
+        } completion: { _ in
+            print("📷 切换到摄像头预览完成")
+        }
+    }
+    
+    private func transitionToStaticImage() {
+        print("📷 开始切换到静态图片")
+        
+        // 执行切换动画
+        UIView.transition(with: centerImageView, duration: 0.3, options: .transitionCrossDissolve) { [weak self] in
+            // 移除预览层
+            self?.previewLayer?.removeFromSuperlayer()
+            self?.previewLayer = nil
+            
+            // 恢复静态图片
+            self?.centerImageView.image = UIImage(named: "a1")
+        } completion: { _ in
+            print("📷 切换到静态图片完成")
+        }
+    }
+    
+    // MARK: - Camera State Management
+    
+    private func shouldShowCameraPreview() -> Bool {
+        guard let viewModel = viewModel else { return false }
+        
+        // 只有在会话运行时且有摄像头权限时才显示摄像头预览
+        let hasPermission = AVCaptureDevice.authorizationStatus(for: .video) == .authorized
+        let isSessionActive = viewModel.sessionState == .running || viewModel.sessionState == .paused
+        
+        return hasPermission && isSessionActive
+    }
+    
+    private func updateCenterImageViewState() {
+        if shouldShowCameraPreview() {
+            // 如果当前没有显示摄像头预览，则切换到摄像头预览
+            if previewLayer == nil {
+                transitionToCamera()
+            }
+        } else {
+            // 如果当前显示摄像头预览，则切换到静态图片
+            if previewLayer != nil {
+                stopCameraPreview()
+            }
+        }
     }
 }
-
