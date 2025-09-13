@@ -270,27 +270,87 @@ class WorkSessionViewController: BaseViewController {
         
         print("🚀 WorkSessionViewController: 开始初始化")
         
-        // 延迟初始化ViewModel以避免阻塞UI
-        DispatchQueue.main.async { [weak self] in
-            self?.initializeViewModel()
+        // 立即设置基本UI，延迟重型操作
+        setupBasicUI()
+        setupNavigationBar()
+        
+        // 异步初始化ViewModel和其他重型操作
+        Task { @MainActor in
+            await initializeViewModelAsync()
+            setupConstraints()
+            setupInitialState()
+            await setupCameraIntegrationAsync()
         }
         
-        setupUI()
-        setupConstraints()
-        setupNavigationBar()
-        setupInitialState()
-        setupCameraIntegration()
-        
-        print("🚀 WorkSessionViewController: 视图控制器加载完成")
+        print("🚀 WorkSessionViewController: 视图控制器基本加载完成")
     }
     
-    private func initializeViewModel() {
-        print("🚀 WorkSessionViewController: 开始初始化ViewModel")
-        viewModel = WorkSessionViewModel()
+    private func setupBasicUI() {
+        view.backgroundColor = .systemBackground
+        title = "HealthyCode"
+        
+        // 只添加基本的视图层次结构，不设置约束
+        view.addSubview(scrollView)
+        scrollView.addSubview(contentView)
+        contentView.addSubview(postureStatusContainerView)
+        contentView.addSubview(timerContainerView)
+        view.addSubview(bottomControlView)
+        
+        // 添加基本的子视图
+        postureStatusContainerView.addSubview(postureStatusIconView)
+        postureStatusContainerView.addSubview(postureStatusLabel)
+        postureStatusContainerView.addSubview(postureSubtitleLabel)
+        
+        timerContainerView.addSubview(centerImageView)
+        timerContainerView.addSubview(timerLabel)
+        timerContainerView.addSubview(timerStatusLabel)
+        timerContainerView.addSubview(loadingIndicator)
+        timerContainerView.addSubview(cameraStatusLabel)
+        
+        bottomControlView.addSubview(controlsStackView)
+        controlsStackView.addArrangedSubview(primaryActionButton)
+        controlsStackView.addArrangedSubview(resetButton)
+        controlsStackView.addArrangedSubview(statsButton)
+        
+        // 设置基本的手势和动作
+        let tapGesture = UITapGestureRecognizer(target: self, action: #selector(centerImageTapped))
+        centerImageView.addGestureRecognizer(tapGesture)
+        
+        primaryActionButton.addTarget(self, action: #selector(primaryActionTapped), for: .touchUpInside)
+        resetButton.addTarget(self, action: #selector(resetButtonTapped), for: .touchUpInside)
+        statsButton.addTarget(self, action: #selector(statsButtonTapped), for: .touchUpInside)
+    }
+    
+    private func initializeViewModelAsync() async {
+        print("🚀 WorkSessionViewController: 开始异步初始化ViewModel")
+        
+        // 创建ViewModel（已经是MainActor隔离的）
+        let viewModel = WorkSessionViewModel()
+        
+        // 在主线程设置ViewModel
+        self.viewModel = viewModel
         setupBindings()
         updateUI()
-        print("🚀 WorkSessionViewController: ViewModel初始化完成")
+        
+        print("🚀 WorkSessionViewController: ViewModel异步初始化完成")
     }
+    
+    private func setupCameraIntegrationAsync() async {
+        print("📷 开始异步设置摄像头集成")
+        
+        // 在后台队列进行摄像头相关的初始化
+        await Task.detached(priority: .userInitiated) {
+            // 这里可以进行一些预处理工作
+        }.value
+        
+        // 在主线程设置摄像头通知
+        checkPermissionAndSetup()
+        setupCameraNotifications()
+        
+        print("📷 摄像头集成异步设置完成")
+    }
+    
+
     
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)

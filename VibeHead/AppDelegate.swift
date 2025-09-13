@@ -15,8 +15,12 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         print("🚀 AppDelegate: UIKit应用启动")
         
-        // 配置应用级别的外观和行为
-        configureAppearance()
+        // 延迟配置外观到后台队列
+        DispatchQueue.global(qos: .userInitiated).async {
+            DispatchQueue.main.async {
+                self.configureAppearance()
+            }
+        }
         
         // 如果没有Scene支持，直接在这里创建窗口
         if #available(iOS 13.0, *) {

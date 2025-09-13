@@ -46,12 +46,20 @@ class PostureDetectionService: NSObject, PostureDetectionServiceProtocol {
     
     override init() {
         super.init()
+        
+        // 立即设置基本配置
         setupVisionRequests()
-        // TODO: Camera service setup removed - will be handled by WorkSessionViewController
-        // setupCameraService()
-        observeCameraPermission()
-        setupWarningService()
-        setupPerformanceMonitoring()
+        
+        // 延迟初始化重型操作到后台队列
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            self?.setupCameraService()
+            
+            DispatchQueue.main.async {
+                self?.observeCameraPermission()
+                self?.setupWarningService()
+                self?.setupPerformanceMonitoring()
+            }
+        }
     }
     
     // MARK: - Setup

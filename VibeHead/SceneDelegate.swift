@@ -21,37 +21,19 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         
         print("🚀 SceneDelegate: WindowScene obtained successfully")
         
-        // 创建最简单的测试视图控制器
-        let testViewController = UIViewController()
-        testViewController.view.backgroundColor = .red
-        testViewController.title = "Test"
-        
-        print("🚀 SceneDelegate: Test view controller created")
-        
-        // 创建窗口
+        // 快速创建窗口和根视图控制器
         window = UIWindow(windowScene: windowScene)
-        print("🚀 SceneDelegate: Window created")
-        
-        // 设置根视图控制器
         window?.rootViewController = createRootViewController()
-        print("🚀 SceneDelegate: Root view controller set")
-        
-        // 显示窗口
         window?.makeKeyAndVisible()
-        print("🚀 SceneDelegate: Window made key and visible")
         
-        // 验证窗口状态
-        print("🚀 SceneDelegate: Window frame: \(window?.frame ?? .zero)")
-        print("🚀 SceneDelegate: Window isHidden: \(window?.isHidden ?? true)")
-        print("🚀 SceneDelegate: Window isKeyWindow: \(window?.isKeyWindow ?? false)")
+        print("🚀 SceneDelegate: Window setup completed")
     }
     
     // MARK: - Private Methods
     
     private func createRootViewController() -> UIViewController {
-        // 使用新的WorkSessionViewController作为根视图控制器
+        // 快速创建WorkSessionViewController
         let workSessionViewController = WorkSessionViewController()
-        workSessionViewController.view.backgroundColor = .red
         return workSessionViewController
     }
 

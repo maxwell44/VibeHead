@@ -27,8 +27,10 @@ class LocalDataRepository: StatisticsServiceProtocol, ObservableObject {
             userDefaults.set(true, forKey: UserDefaultsKeys.isFirstLaunch)
         }
         
-        // 定期清理过期数据
-        clearExpiredData()
+        // 延迟清理过期数据到后台队列，避免阻塞启动
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            self?.clearExpiredData()
+        }
     }
     
     // MARK: - Session Management

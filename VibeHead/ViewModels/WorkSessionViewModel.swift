@@ -77,7 +77,7 @@ class WorkSessionViewModel: ObservableObject {
     init() {
         print("🔧 WorkSessionViewModel: Starting initialization")
         
-        // 延迟初始化服务以避免阻塞UI
+        // 使用轻量级初始化，延迟重型操作
         self.statisticsService = StatisticsService()
         print("🔧 WorkSessionViewModel: StatisticsService initialized")
         
@@ -89,9 +89,19 @@ class WorkSessionViewModel: ObservableObject {
         
         print("🔧 WorkSessionViewModel: Setting up bindings")
         setupBindings()
-        setupPostureIntegration()
+        
+        // 延迟体态集成设置到后台队列
+        Task {
+            await setupPostureIntegrationAsync()
+        }
         
         print("🔧 WorkSessionViewModel: Initialization completed")
+    }
+    
+    private func setupPostureIntegrationAsync() async {
+        await MainActor.run {
+            setupPostureIntegration()
+        }
     }
     
     init(
