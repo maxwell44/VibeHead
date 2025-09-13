@@ -309,14 +309,19 @@ class PostureDetectionService: NSObject, PostureDetectionServiceProtocol, @unche
             try sequenceHandler.perform(requests, on: pixelBuffer)
             
             // Handle face detection results
-            if let faceResults = faceDetectionRequest.results as? [VNFaceObservation] {
-                handleFaceDetectionResults(faceResults)
-            }
+            let faceResults = faceDetectionRequest.results as? [VNFaceObservation] ?? []
+            let landmarkResults = (requests.count > 1) ? (faceLandmarksRequest.results as? [VNFaceObservation] ?? []) : []
             
-            // Handle landmarks results for more detailed analysis (if enabled)
-            if requests.count > 1,
-               let landmarkResults = faceLandmarksRequest.results as? [VNFaceObservation] {
+            // Use the most detailed results available
+            if !landmarkResults.isEmpty {
                 handleFaceLandmarksResults(landmarkResults)
+            } else if !faceResults.isEmpty {
+                handleFaceDetectionResults(faceResults)
+            } else {
+                // No face detected in any request
+                DispatchQueue.main.async { [weak self] in
+                    self?.updatePosture(.notPresent)
+                }
             }
             
         } catch {
@@ -367,21 +372,23 @@ class PostureDetectionService: NSObject, PostureDetectionServiceProtocol, @unche
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
             
+            // At this point we know faces is not empty (checked in caller)
             if let primaryFace = faces.first {
                 self.lastFaceObservation = primaryFace
                 self.analyzeFaceObservation(primaryFace)
-            } else {
-                // No face detected - user is not present
-                self.updatePosture(.notPresent)
             }
         }
     }
     
     private func handleFaceLandmarksResults(_ faces: [VNFaceObservation]) {
-        guard let primaryFace = faces.first else { return }
-        
         DispatchQueue.main.async { [weak self] in
-            self?.analyzeDetailedFacePosture(primaryFace)
+            guard let self = self else { return }
+            
+            // At this point we know faces is not empty (checked in caller)
+            if let primaryFace = faces.first {
+                self.lastFaceObservation = primaryFace
+                self.analyzeDetailedFacePosture(primaryFace)
+            }
         }
     }
     
