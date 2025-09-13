@@ -110,9 +110,37 @@ class CameraService: NSObject, ObservableObject {
         
         await MainActor.run {
             self.authorizationStatus = AVCaptureDevice.authorizationStatus(for: .video)
+            
+            // If permission was granted, setup the camera session
+            if self.authorizationStatus == .authorized {
+                self.setupCameraSessionAfterPermission()
+            }
         }
         
         return status
+    }
+    
+    private func setupCameraSessionAfterPermission() {
+        sessionQueue.async { [weak self] in
+            guard let self = self else { return }
+            
+            self.captureSession.beginConfiguration()
+            
+            do {
+                // Setup video input (front camera)
+                try self.setupVideoInput()
+                
+                // Setup video output
+                try self.setupVideoOutput()
+                
+                self.captureSession.commitConfiguration()
+                
+                print("Camera session configured successfully after permission granted")
+            } catch {
+                self.captureSession.commitConfiguration()
+                self.handleCameraError(error)
+            }
+        }
     }
     
     func handleCameraPermissionDenied() -> HealthyCodeError {
@@ -138,12 +166,8 @@ class CameraService: NSObject, ObservableObject {
     }
     
     private func configureCaptureSession() {
-        do {
-            try validateCameraAvailability()
-        } catch {
-            handleCameraError(error)
-            return
-        }
+        // Don't validate camera availability during initial setup
+        // This will be checked when starting the session
         
         captureSession.beginConfiguration()
         
@@ -152,20 +176,25 @@ class CameraService: NSObject, ObservableObject {
             captureSession.sessionPreset = .medium
         }
         
-        do {
-            // Setup video input (front camera)
-            try setupVideoInput()
-            
-            // Setup video output
-            try setupVideoOutput()
-            
-            // Setup preview layer
-            setupPreviewLayer()
-            
+        // Always setup preview layer
+        setupPreviewLayer()
+        
+        // Only setup input/output if we have permission
+        if authorizationStatus == .authorized {
+            do {
+                // Setup video input (front camera)
+                try setupVideoInput()
+                
+                // Setup video output
+                try setupVideoOutput()
+                
+                captureSession.commitConfiguration()
+            } catch {
+                captureSession.commitConfiguration()
+                handleCameraError(error)
+            }
+        } else {
             captureSession.commitConfiguration()
-        } catch {
-            captureSession.commitConfiguration()
-            handleCameraError(error)
         }
     }
     
