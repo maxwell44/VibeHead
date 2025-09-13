@@ -9,6 +9,8 @@ import UIKit
 
 @main
 class AppDelegate: UIResponder, UIApplicationDelegate {
+    
+    var window: UIWindow?
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         print("🚀 AppDelegate: UIKit应用启动")
@@ -16,7 +18,29 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         // 配置应用级别的外观和行为
         configureAppearance()
         
+        // 如果没有Scene支持，直接在这里创建窗口
+        if #available(iOS 13.0, *) {
+            // iOS 13+ 使用Scene
+            print("🚀 AppDelegate: iOS 13+ - 使用Scene")
+        } else {
+            // iOS 12 及以下版本的窗口设置
+            print("🚀 AppDelegate: iOS 12- - 直接设置窗口")
+            setupWindowForOlderiOS()
+        }
+        
         return true
+    }
+    
+    private func setupWindowForOlderiOS() {
+        window = UIWindow(frame: UIScreen.main.bounds)
+        let testViewController = UIViewController()
+        testViewController.view.backgroundColor = .blue
+        testViewController.title = "AppDelegate Test"
+        
+        window?.rootViewController = testViewController
+        window?.makeKeyAndVisible()
+        
+        print("🚀 AppDelegate: 旧版iOS窗口设置完成")
     }
     
     // MARK: - Private Methods

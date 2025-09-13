@@ -12,23 +12,38 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     var window: UIWindow?
 
     func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {
-        guard let windowScene = (scene as? UIWindowScene) else { return }
+        print("🚀 SceneDelegate: scene willConnectTo called")
         
-        print("🚀 SceneDelegate: Starting UIKit scene setup")
+        guard let windowScene = (scene as? UIWindowScene) else { 
+            print("❌ SceneDelegate: Failed to cast scene to UIWindowScene")
+            return 
+        }
         
-        // 创建UIKit根视图控制器
-        let rootViewController = createRootViewController()
-        let navigationController = UINavigationController(rootViewController: rootViewController)
+        print("🚀 SceneDelegate: WindowScene obtained successfully")
         
-        // 配置导航栏外观
-        configureNavigationBarAppearance(navigationController)
+        // 创建最简单的测试视图控制器
+        let testViewController = UIViewController()
+        testViewController.view.backgroundColor = .red
+        testViewController.title = "Test"
         
-        // 设置窗口
+        print("🚀 SceneDelegate: Test view controller created")
+        
+        // 创建窗口
         window = UIWindow(windowScene: windowScene)
-        window?.rootViewController = navigationController
-        window?.makeKeyAndVisible()
+        print("🚀 SceneDelegate: Window created")
         
-        print("🚀 SceneDelegate: UIKit window setup completed")
+        // 设置根视图控制器
+        window?.rootViewController = createRootViewController()
+        print("🚀 SceneDelegate: Root view controller set")
+        
+        // 显示窗口
+        window?.makeKeyAndVisible()
+        print("🚀 SceneDelegate: Window made key and visible")
+        
+        // 验证窗口状态
+        print("🚀 SceneDelegate: Window frame: \(window?.frame ?? .zero)")
+        print("🚀 SceneDelegate: Window isHidden: \(window?.isHidden ?? true)")
+        print("🚀 SceneDelegate: Window isKeyWindow: \(window?.isKeyWindow ?? false)")
     }
     
     // MARK: - Private Methods
@@ -36,6 +51,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     private func createRootViewController() -> UIViewController {
         // 使用新的WorkSessionViewController作为根视图控制器
         let workSessionViewController = WorkSessionViewController()
+        workSessionViewController.view.backgroundColor = .red
         return workSessionViewController
     }
 
