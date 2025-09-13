@@ -103,8 +103,12 @@ class WorkSessionViewController: BaseViewController {
         let label = UILabel()
         label.text = "25:00"
         label.font = .monospacedDigitSystemFont(ofSize: 48, weight: .light)
-        label.textColor = .label
+        label.textColor = .white
         label.textAlignment = .center
+        label.layer.shadowColor = UIColor.black.cgColor
+        label.layer.shadowOffset = CGSize(width: 0, height: 2)
+        label.layer.shadowOpacity = 0.8
+        label.layer.shadowRadius = 4
         return label
     }()
     
@@ -112,8 +116,12 @@ class WorkSessionViewController: BaseViewController {
         let label = UILabel()
         label.text = "准备开始"
         label.font = .systemFont(ofSize: 14, weight: .medium)
-        label.textColor = .secondaryLabel
+        label.textColor = .white
         label.textAlignment = .center
+        label.layer.shadowColor = UIColor.black.cgColor
+        label.layer.shadowOffset = CGSize(width: 0, height: 1)
+        label.layer.shadowOpacity = 0.8
+        label.layer.shadowRadius = 2
         return label
     }()
     
@@ -121,9 +129,9 @@ class WorkSessionViewController: BaseViewController {
     private let centerImageView: UIImageView = {
         let imageView = UIImageView()
         imageView.image = UIImage(named: "a1")
-        imageView.contentMode = .scaleAspectFit
+        imageView.contentMode = .scaleAspectFill
         imageView.isUserInteractionEnabled = true
-        imageView.layer.cornerRadius = 30
+        imageView.layer.cornerRadius = 140 // 280/2 = 140，设置为圆形
         imageView.clipsToBounds = true
         return imageView
     }()
@@ -259,9 +267,9 @@ class WorkSessionViewController: BaseViewController {
         
         // 计时器区域 - 圆形设计
         contentView.addSubview(timerContainerView)
-        timerContainerView.addSubview(timerLabel)
+        timerContainerView.addSubview(centerImageView) // 先添加背景图片
+        timerContainerView.addSubview(timerLabel)      // 再添加文字，确保在上层
         timerContainerView.addSubview(timerStatusLabel)
-        timerContainerView.addSubview(centerImageView)
         
         // 添加圆形进度环
         timerContainerView.layer.addSublayer(progressBackgroundRingLayer)
@@ -341,9 +349,8 @@ class WorkSessionViewController: BaseViewController {
         }
         
         centerImageView.snp.makeConstraints { make in
-            make.bottom.equalTo(timerLabel.snp.top).offset(-20)
-            make.centerX.equalToSuperview()
-            make.width.height.equalTo(60)
+            make.center.equalToSuperview()
+            make.width.height.equalTo(280) // 和 timerContainerView 一样大
         }
         
         // 会话信息区域约束 - 已移除
@@ -447,30 +454,32 @@ class WorkSessionViewController: BaseViewController {
         switch viewModel.sessionState {
         case .idle:
             timerStatusLabel.text = "准备开始"
-            timerStatusLabel.textColor = .secondaryLabel
+            timerStatusLabel.textColor = .white
             progressRingLayer.strokeColor = UIColor.systemGray4.cgColor
         case .running:
             timerStatusLabel.text = "进行中"
-            timerStatusLabel.textColor = .primaryBlue
+            timerStatusLabel.textColor = .white
             progressRingLayer.strokeColor = UIColor.primaryBlue.cgColor
         case .paused:
             timerStatusLabel.text = "已暂停"
-            timerStatusLabel.textColor = .warningOrange
+            timerStatusLabel.textColor = .white
             progressRingLayer.strokeColor = UIColor.warningOrange.cgColor
         case .completed:
             timerStatusLabel.text = "已完成"
-            timerStatusLabel.textColor = .healthyGreen
+            timerStatusLabel.textColor = .white
             progressRingLayer.strokeColor = UIColor.healthyGreen.cgColor
         case .error:
             timerStatusLabel.text = "错误"
-            timerStatusLabel.textColor = .alertRed
+            timerStatusLabel.textColor = .white
             progressRingLayer.strokeColor = UIColor.alertRed.cgColor
         }
     }
     
     private func updateCircularProgress(progress: Double) {
-        let center = CGPoint(x: timerContainerView.bounds.midX, y: timerContainerView.bounds.midY)
-        let radius: CGFloat = 120
+        // 使用 layer 自身的坐标系，中心点为 bounds 的中心
+        let layerBounds = progressRingLayer.bounds
+        let center = CGPoint(x: layerBounds.midX, y: layerBounds.midY)
+        let radius: CGFloat = min(layerBounds.width, layerBounds.height) / 2 - 20 // 留出一些边距
         let startAngle = -CGFloat.pi / 2
         let endAngle = startAngle + 2 * CGFloat.pi
         
@@ -501,6 +510,8 @@ class WorkSessionViewController: BaseViewController {
             iconName = "arrow.left.and.right.circle.fill"
         case .tooClose:
             iconName = "exclamationmark.triangle.fill"
+        case .notPresent:
+            iconName = "person.slash.fill"
         }
         
         postureStatusIconView.image = UIImage(systemName: iconName)
@@ -771,10 +782,12 @@ class WorkSessionViewController: BaseViewController {
         timerContainerView.layer.cornerRadius = timerContainerView.bounds.width / 2
         timerContainerView.clipsToBounds = false
         
-        // 更新进度环的位置
-        let center = CGPoint(x: timerContainerView.bounds.midX, y: timerContainerView.bounds.midY)
-        progressBackgroundRingLayer.position = center
-        progressRingLayer.position = center
+        // 设置进度环的 bounds 和 position
+        let containerBounds = timerContainerView.bounds
+        progressBackgroundRingLayer.bounds = containerBounds
+        progressRingLayer.bounds = containerBounds
+        progressBackgroundRingLayer.position = CGPoint(x: containerBounds.midX, y: containerBounds.midY)
+        progressRingLayer.position = CGPoint(x: containerBounds.midX, y: containerBounds.midY)
     }
 }
 

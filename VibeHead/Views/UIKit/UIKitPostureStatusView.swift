@@ -75,6 +75,8 @@ class UIKitPostureStatusView: UIView {
             return "arrow.left.and.right.circle.fill"
         case .tooClose:
             return "exclamationmark.triangle.fill"
+        case .notPresent:
+            return "person.slash.fill"
         }
     }
     
