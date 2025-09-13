@@ -50,7 +50,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     
     private func createRootViewController() -> UIViewController {
         // 使用新的WorkSessionViewController作为根视图控制器
-        let workSessionViewController = CameraTestViewController()
+        let workSessionViewController = WorkSessionViewController()
         workSessionViewController.view.backgroundColor = .red
         return workSessionViewController
     }

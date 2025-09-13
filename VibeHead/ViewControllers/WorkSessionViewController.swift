@@ -17,6 +17,11 @@ class WorkSessionViewController: BaseViewController {
     private var viewModel: WorkSessionViewModel!
     private var cancellables = Set<AnyCancellable>()
     
+    // MARK: - Camera Properties
+    private let captureSession = AVCaptureSession()
+    private var previewLayer: AVCaptureVideoPreviewLayer?
+    private let sessionQueue = DispatchQueue(label: "camera.session.queue")
+    
     // MARK: - UI Components
     
     // 主滚动视图
@@ -230,6 +235,7 @@ class WorkSessionViewController: BaseViewController {
         setupConstraints()
         setupNavigationBar()
         setupInitialState()
+        setupCameraIntegration()
         
         print("🚀 WorkSessionViewController: 视图控制器加载完成")
     }
@@ -426,6 +432,11 @@ class WorkSessionViewController: BaseViewController {
     
     private func setupInitialState() {
         updateUI()
+    }
+    
+    private func setupCameraIntegration() {
+        print("📷 开始设置摄像头集成")
+        checkPermissionAndSetup()
     }
     
     // MARK: - UI Update Methods
@@ -788,6 +799,145 @@ class WorkSessionViewController: BaseViewController {
         progressRingLayer.bounds = containerBounds
         progressBackgroundRingLayer.position = CGPoint(x: containerBounds.midX, y: containerBounds.midY)
         progressRingLayer.position = CGPoint(x: containerBounds.midX, y: containerBounds.midY)
+    }
+    
+    // MARK: - Camera Integration Methods
+    
+    private func checkPermissionAndSetup() {
+        switch AVCaptureDevice.authorizationStatus(for: .video) {
+        case .authorized:
+            setupCameraSession()
+        case .notDetermined:
+            AVCaptureDevice.requestAccess(for: .video) { [weak self] granted in
+                DispatchQueue.main.async {
+                    if granted {
+                        self?.setupCameraSession()
+                    }
+                    // Update UI regardless of permission result
+                    self?.updateUI()
+                }
+            }
+        case .denied, .restricted:
+            // Permission denied or restricted - will show static image
+            print("📷 摄像头权限被拒绝或受限")
+        @unknown default:
+            print("📷 未知的摄像头权限状态")
+        }
+    }
+    
+    private func setupCameraSession() {
+        sessionQueue.async { [weak self] in
+            guard let self = self else { return }
+            
+            self.captureSession.beginConfiguration()
+            self.captureSession.sessionPreset = .photo
+            
+            // 找到前置摄像头
+            let deviceTypes: [AVCaptureDevice.DeviceType] = [.builtInWideAngleCamera, .builtInTrueDepthCamera]
+            let discovery = AVCaptureDevice.DiscoverySession(
+                deviceTypes: deviceTypes,
+                mediaType: .video,
+                position: .front
+            )
+            
+            guard let frontDevice = discovery.devices.first else {
+                print("📷 找不到前置摄像头")
+                self.captureSession.commitConfiguration()
+                return
+            }
+            
+            do {
+                let input = try AVCaptureDeviceInput(device: frontDevice)
+                if self.captureSession.canAddInput(input) {
+                    self.captureSession.addInput(input)
+                }
+            } catch {
+                print("📷 创建摄像头输入失败：", error)
+                self.captureSession.commitConfiguration()
+                return
+            }
+            
+            self.captureSession.commitConfiguration()
+            print("📷 摄像头会话设置完成")
+        }
+    }
+    
+    private func startCameraPreview() {
+        guard AVCaptureDevice.authorizationStatus(for: .video) == .authorized else {
+            print("📷 摄像头权限未授权，无法启动预览")
+            return
+        }
+        
+        sessionQueue.async { [weak self] in
+            guard let self = self else { return }
+            
+            if !self.captureSession.isRunning {
+                self.captureSession.startRunning()
+                print("📷 摄像头预览已启动")
+                
+                DispatchQueue.main.async {
+                    self.setupCameraPreviewLayer()
+                }
+            }
+        }
+    }
+    
+    private func stopCameraPreview() {
+        sessionQueue.async { [weak self] in
+            guard let self = self else { return }
+            
+            if self.captureSession.isRunning {
+                self.captureSession.stopRunning()
+                print("📷 摄像头预览已停止")
+                
+                DispatchQueue.main.async {
+                    self.removeCameraPreviewLayer()
+                }
+            }
+        }
+    }
+    
+    private func setupCameraPreviewLayer() {
+        // 移除现有的预览层
+        removeCameraPreviewLayer()
+        
+        // 创建新的预览层
+        previewLayer = AVCaptureVideoPreviewLayer(session: captureSession)
+        guard let previewLayer = previewLayer else { return }
+        
+        previewLayer.videoGravity = .resizeAspectFill
+        previewLayer.frame = centerImageView.bounds
+        
+        // 设置视频方向
+        if let connection = previewLayer.connection {
+            if #available(iOS 17.0, *) {
+                if connection.isVideoRotationAngleSupported(270) {
+                    connection.videoRotationAngle = 90 // 向左旋转90度
+                }
+            } else {
+                if connection.isVideoOrientationSupported {
+                    connection.videoOrientation = .landscapeRight // 向左旋转90度
+                }
+            }
+        }
+        
+        // 将预览层添加到centerImageView的layer中
+        centerImageView.layer.addSublayer(previewLayer)
+        
+        // 隐藏静态图片
+        centerImageView.image = nil
+        
+        print("📷 摄像头预览层已设置")
+    }
+    
+    private func removeCameraPreviewLayer() {
+        previewLayer?.removeFromSuperlayer()
+        previewLayer = nil
+        
+        // 恢复静态图片
+        centerImageView.image = UIImage(named: "a1")
+        
+        print("📷 摄像头预览层已移除")
     }
 }
 

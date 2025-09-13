@@ -6,7 +6,7 @@
   - 确保删除后项目能正常编译
   - _Requirements: 4.1_
 
-- [ ] 2. 在WorkSessionViewController中添加摄像头集成基础设施
+- [x] 2. 在WorkSessionViewController中添加摄像头集成基础设施
   - 添加AVCaptureSession相关属性和队列
   - 从CameraTestViewController复制核心摄像头设置方法
   - 实现权限检查和请求逻辑
