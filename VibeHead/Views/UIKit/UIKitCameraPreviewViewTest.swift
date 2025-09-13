@@ -24,9 +24,7 @@ class UIKitCameraPreviewViewTest {
     static func createPreviewInstance(for state: PreviewState) -> UIKitCameraPreviewView {
         let previewView = UIKitCameraPreviewView()
         
-        // 创建模拟的摄像头服务
-        let cameraService = CameraService()
-        previewView.configure(with: cameraService)
+        // 直接使用预览视图，不需要配置服务
         
         // 根据状态配置视图（通过摄像头服务）
         switch state {
@@ -93,9 +91,7 @@ private class TestViewController: UIViewController {
             make.height.equalTo(200)
         }
         
-        // 创建摄像头服务并配置
-        let cameraService = CameraService()
-        cameraPreviewView.configure(with: cameraService)
+        // 直接启动预览，不需要配置服务
         
         // 设置回调
         cameraPreviewView.onPermissionRequested = {

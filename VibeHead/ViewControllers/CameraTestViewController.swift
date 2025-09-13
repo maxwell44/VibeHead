@@ -14,9 +14,18 @@ class CameraTestViewController: UIViewController {
     private let photoOutput = AVCapturePhotoOutput()
     private let sessionQueue = DispatchQueue(label: "camera.session.queue")
     
+    // 圆形摄像头预览容器
+    private let cameraContainerView: UIView = {
+        let view = UIView()
+        view.backgroundColor = .black
+        view.layer.cornerRadius = 140 // 280/2 = 140
+        view.clipsToBounds = true
+        return view
+    }()
+    
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = .black
+        view.backgroundColor = .systemBackground
         title = "摄像头测试"
         
         // 添加导航栏关闭按钮
@@ -26,12 +35,55 @@ class CameraTestViewController: UIViewController {
             action: #selector(closeButtonTapped)
         )
         
+        setupUI()
         checkPermissionAndSetup()
+    }
+    
+    private func setupUI() {
+        // 添加标题标签
+        let titleLabel = UILabel()
+        titleLabel.text = "圆形摄像头预览测试"
+        titleLabel.font = .systemFont(ofSize: 20, weight: .semibold)
+        titleLabel.textColor = .label
+        titleLabel.textAlignment = .center
+        titleLabel.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(titleLabel)
+        
+        // 添加说明标签
+        let descriptionLabel = UILabel()
+        descriptionLabel.text = "280x280 圆形前置摄像头预览"
+        descriptionLabel.font = .systemFont(ofSize: 16, weight: .regular)
+        descriptionLabel.textColor = .secondaryLabel
+        descriptionLabel.textAlignment = .center
+        descriptionLabel.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(descriptionLabel)
+        
+        view.addSubview(cameraContainerView)
+        
+        // 设置约束
+        cameraContainerView.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            // 标题标签约束
+            titleLabel.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 30),
+            titleLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
+            titleLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
+            
+            // 说明标签约束
+            descriptionLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 10),
+            descriptionLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
+            descriptionLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
+            
+            // 圆形容器约束
+            cameraContainerView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            cameraContainerView.topAnchor.constraint(equalTo: descriptionLabel.bottomAnchor, constant: 40),
+            cameraContainerView.widthAnchor.constraint(equalToConstant: 280),
+            cameraContainerView.heightAnchor.constraint(equalToConstant: 280)
+        ])
     }
     
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
-        previewLayer?.frame = view.bounds
+        previewLayer?.frame = cameraContainerView.bounds
     }
     
     @objc private func closeButtonTapped() {
@@ -112,37 +164,39 @@ class CameraTestViewController: UIViewController {
         previewLayer = AVCaptureVideoPreviewLayer(session: session)
         previewLayer.videoGravity = .resizeAspectFill
         
-        // 设置视频方向
+        // 设置视频方向 - 向左旋转90度
         if let connection = previewLayer.connection {
             if #available(iOS 17.0, *) {
-                if connection.isVideoRotationAngleSupported(0) {
-                    connection.videoRotationAngle = 0
+                if connection.isVideoRotationAngleSupported(270) {
+                    connection.videoRotationAngle = 90 // 向左旋转90度
                 }
             } else {
                 if connection.isVideoOrientationSupported {
-                    connection.videoOrientation = .portrait
+                    connection.videoOrientation = .landscapeRight // 向左旋转90度
                 }
             }
         }
         
-        previewLayer.frame = view.bounds
-        view.layer.insertSublayer(previewLayer, at: 0)
+        // 将预览层添加到圆形容器中
+        previewLayer.frame = cameraContainerView.bounds
+        cameraContainerView.layer.addSublayer(previewLayer)
         
         // 添加一个拍照按钮演示
         let btn = UIButton(type: .system)
-        btn.setTitle("拍照", for: .normal)
-        btn.backgroundColor = UIColor(white: 0.1, alpha: 0.6)
+        btn.setTitle("拍照测试", for: .normal)
+        btn.backgroundColor = .systemBlue
         btn.setTitleColor(.white, for: .normal)
-        btn.layer.cornerRadius = 6
+        btn.layer.cornerRadius = 25
+        btn.titleLabel?.font = .systemFont(ofSize: 16, weight: .semibold)
         btn.translatesAutoresizingMaskIntoConstraints = false
         btn.addTarget(self, action: #selector(takePhoto), for: .touchUpInside)
         view.addSubview(btn)
         
         NSLayoutConstraint.activate([
-            btn.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -20),
+            btn.topAnchor.constraint(equalTo: cameraContainerView.bottomAnchor, constant: 40),
             btn.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            btn.widthAnchor.constraint(equalToConstant: 80),
-            btn.heightAnchor.constraint(equalToConstant: 44)
+            btn.widthAnchor.constraint(equalToConstant: 120),
+            btn.heightAnchor.constraint(equalToConstant: 50)
         ])
     }
     
