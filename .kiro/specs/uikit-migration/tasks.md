@@ -30,7 +30,7 @@
   - 实现颜色变化和动画过渡效果
   - _需求: 2.1, 2.2, 5.3, 7.2_
 
-- [ ] 6. 创建摄像头预览组件
+- [x] 6. 创建摄像头预览组件
   - 实现CameraPreviewView使用AVCaptureVideoPreviewLayer
   - 用SnapKit设置预览层的约束和边框样式
   - 处理摄像头权限状态和错误情况的UI显示
