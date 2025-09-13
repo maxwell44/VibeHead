@@ -218,18 +218,23 @@ class BaseViewController: UIViewController {
             message = "检测到数据损坏，正在尝试恢复..."
             actions.append(UIAlertAction(title: "确定", style: .default))
             
-        case .networkError(let description):
-            title = "网络错误"
-            message = description
+        case .sessionInProgress:
+            title = "会话进行中"
+            message = error.localizedDescription
+            actions.append(UIAlertAction(title: "确定", style: .default))
+            
+        case .invalidSettings:
+            title = "设置错误"
+            message = error.localizedDescription
+            actions.append(UIAlertAction(title: "确定", style: .default))
+            
+        case .storageError:
+            title = "存储错误"
+            message = error.localizedDescription
             actions.append(UIAlertAction(title: "重试", style: .default) { _ in
                 self.retryLastOperation()
             })
-            actions.append(UIAlertAction(title: "取消", style: .cancel))
-            
-        case .unknownError(let description):
-            title = "未知错误"
-            message = description
-            actions.append(UIAlertAction(title: "确定", style: .default))
+            actions.append(UIAlertAction(title: "确定", style: .cancel))
         }
         
         showAlert(title: title, message: message, actions: actions)

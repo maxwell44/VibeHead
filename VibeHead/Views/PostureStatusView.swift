@@ -49,7 +49,7 @@ struct PostureStatusView: View {
         if shouldShowWarning {
             return .red
         }
-        return currentPosture.color
+        return currentPosture.swiftUIColor
     }
     
     /// 进度条进度值

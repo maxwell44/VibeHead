@@ -28,3 +28,35 @@ extension UIColor {
         return postureType.color
     }
 }
+
+// MARK: - SwiftUI Color Extensions (for compatibility)
+#if canImport(SwiftUI)
+import SwiftUI
+
+@available(iOS 13.0, *)
+extension Color {
+    /// 健康绿色
+    static let healthyGreen = Color(UIColor.healthyGreen)
+    
+    /// 警告橙色
+    static let warningOrange = Color(UIColor.warningOrange)
+    
+    /// 警报红色
+    static let alertRed = Color(UIColor.alertRed)
+    
+    /// 主要蓝色
+    static let primaryBlue = Color(UIColor.primaryBlue)
+    
+    /// 自适应背景色
+    static let adaptiveBackground = Color(UIColor.systemBackground)
+    
+    /// 自适应分组背景色
+    static let adaptiveGroupedBackground = Color(UIColor.secondarySystemBackground)
+    
+    /// 自适应文本色
+    static let adaptiveText = Color(UIColor.label)
+    
+    /// 自适应次要文本色
+    static let adaptiveSecondaryText = Color(UIColor.secondaryLabel)
+}
+#endif

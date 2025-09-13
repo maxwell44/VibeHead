@@ -19,9 +19,9 @@ enum PostureType: String, CaseIterable, Codable {
     var color: UIColor {
         switch self {
         case .excellent:
-            return .systemGreen
+            return .healthyGreen
         case .lookingDown, .tilted, .tooClose:
-            return .systemOrange
+            return .warningOrange
         }
     }
     
@@ -44,3 +44,16 @@ enum PostureType: String, CaseIterable, Codable {
         }
     }
 }
+
+// MARK: - SwiftUI Color Support
+#if canImport(SwiftUI)
+import SwiftUI
+
+@available(iOS 13.0, *)
+extension PostureType {
+    /// SwiftUI Color版本的颜色
+    var swiftUIColor: Color {
+        return Color(color)
+    }
+}
+#endif

@@ -122,7 +122,7 @@ struct WorkSessionView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 16))
                         .overlay(
                             RoundedRectangle(cornerRadius: 16)
-                                .stroke(viewModel.currentPosture.color, lineWidth: 3)
+                                .stroke(viewModel.currentPosture.swiftUIColor, lineWidth: 3)
                         )
                 } else {
                     cameraPlaceholder

@@ -68,7 +68,7 @@ struct PostureMonitorView: View {
                     .cornerRadius(12)
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
-                            .stroke(postureDetectionService.currentPosture.color, lineWidth: 2)
+                            .stroke(postureDetectionService.currentPosture.swiftUIColor, lineWidth: 2)
                     )
             } else {
                 cameraPermissionPrompt
