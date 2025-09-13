@@ -189,7 +189,7 @@ struct PostureTimeRow: View {
             // 体态类型和颜色指示器
             HStack(spacing: 8) {
                 Circle()
-                    .fill(postureType.color)
+                    .fill(postureType.swiftUIColor)
                     .frame(width: 12, height: 12)
                 
                 Text(postureType.rawValue)
@@ -267,7 +267,7 @@ struct PostureProgressBar: View {
                 Text(String(format: "%.1f%%", percentage))
                     .font(.subheadline)
                     .fontWeight(.semibold)
-                    .foregroundColor(postureType.color)
+                    .foregroundColor(postureType.swiftUIColor)
             }
             
             // 进度条
@@ -281,7 +281,7 @@ struct PostureProgressBar: View {
                     
                     // 进度
                     Rectangle()
-                        .fill(postureType.color)
+                        .fill(postureType.swiftUIColor)
                         .frame(width: geometry.size.width * (percentage / 100), height: 8)
                         .cornerRadius(4)
                         .animation(.easeInOut(duration: 0.5), value: percentage)
