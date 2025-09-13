@@ -16,27 +16,36 @@ class UIKitCameraPreviewView: UIView {
     
     // MARK: - Properties
     
-    /// 摄像头服务
-    private weak var cameraService: CameraService?
+    /// 摄像头会话
+    private let captureSession = AVCaptureSession()
+    
+    /// 会话队列
+    private let sessionQueue = DispatchQueue(label: "camera.preview.session.queue")
     
     /// 当前权限状态
     private var authorizationStatus: AVAuthorizationStatus = .notDetermined {
         didSet {
-            updateUI()
+            DispatchQueue.main.async {
+                self.updateUI()
+            }
         }
     }
     
     /// 是否正在显示预览
     private var isPreviewActive: Bool = false {
         didSet {
-            updateUI()
+            DispatchQueue.main.async {
+                self.updateUI()
+            }
         }
     }
     
     /// 当前错误状态
     private var currentError: HealthyCodeError? {
         didSet {
-            updateUI()
+            DispatchQueue.main.async {
+                self.updateUI()
+            }
         }
     }
     
@@ -101,9 +110,16 @@ class UIKitCameraPreviewView: UIView {
         updateUI()
     }
     
-    deinit {
-        NotificationCenter.default.removeObserver(self)
+    override func didMoveToSuperview() {
+        super.didMoveToSuperview()
+        
+        // 当视图被添加到父视图时，自动启动预览
+        if superview != nil {
+            startPreview()
+        }
     }
+    
+
     
     // MARK: - Setup Methods
     
@@ -267,52 +283,44 @@ class UIKitCameraPreviewView: UIView {
     
     // MARK: - Public Methods
     
-    /// 配置摄像头服务
-    /// - Parameter cameraService: 摄像头服务实例
-    func configure(with cameraService: CameraService) {
-        self.cameraService = cameraService
-        
-        // 监听权限状态变化
-        cameraService.$authorizationStatus
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] status in
-                self?.authorizationStatus = status
-            }
-            .store(in: &cancellables)
-        
-        // 监听会话运行状态
-        cameraService.$isSessionRunning
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] isRunning in
-                self?.isPreviewActive = isRunning
-            }
-            .store(in: &cancellables)
-        
-        // 设置预览层
-        if let previewLayer = cameraService.previewLayer {
-            setupPreviewLayer(previewLayer)
-        }
-        
-        // 监听预览层变化
-        cameraService.$previewLayer
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] previewLayer in
-                if let layer = previewLayer {
-                    self?.setupPreviewLayer(layer)
-                }
-            }
-            .store(in: &cancellables)
-    }
-    
     /// 开始预览
     func startPreview() {
-        guard let cameraService = cameraService else { return }
+        checkPermissionAndSetup()
+    }
+    
+    /// 停止预览
+    func stopPreview() {
+        sessionQueue.async {
+            if self.captureSession.isRunning {
+                self.captureSession.stopRunning()
+            }
+        }
+        
+        DispatchQueue.main.async {
+            self.isPreviewActive = false
+        }
+    }
+    
+    // MARK: - Private Methods
+    
+    private var cancellables = Set<AnyCancellable>()
+    
+    /// 检查权限并设置摄像头
+    private func checkPermissionAndSetup() {
+        authorizationStatus = AVCaptureDevice.authorizationStatus(for: .video)
         
         switch authorizationStatus {
         case .authorized:
-            cameraService.startPreviewOnly()
+            setupCameraSession()
         case .notDetermined:
-            requestCameraPermission()
+            AVCaptureDevice.requestAccess(for: .video) { [weak self] granted in
+                DispatchQueue.main.async {
+                    self?.authorizationStatus = granted ? .authorized : .denied
+                    if granted {
+                        self?.setupCameraSession()
+                    }
+                }
+            }
         case .denied, .restricted:
             showPermissionDeniedState()
         @unknown default:
@@ -320,38 +328,113 @@ class UIKitCameraPreviewView: UIView {
         }
     }
     
-    /// 停止预览
-    func stopPreview() {
-        cameraService?.stopSession()
+    /// 设置摄像头会话
+    private func setupCameraSession() {
+        sessionQueue.async {
+            self.captureSession.beginConfiguration()
+            self.captureSession.sessionPreset = .medium
+            
+            // 找到前置摄像头
+            let deviceTypes: [AVCaptureDevice.DeviceType] = [
+                .builtInWideAngleCamera,
+                .builtInTrueDepthCamera
+            ]
+            
+            let discoverySession = AVCaptureDevice.DiscoverySession(
+                deviceTypes: deviceTypes,
+                mediaType: .video,
+                position: .front
+            )
+            
+            guard let frontCamera = discoverySession.devices.first else {
+                print("🎥 找不到前置摄像头")
+                DispatchQueue.main.async {
+                    self.showErrorState(.cameraNotAvailable)
+                }
+                self.captureSession.commitConfiguration()
+                return
+            }
+            
+            do {
+                // 创建输入
+                let input = try AVCaptureDeviceInput(device: frontCamera)
+                
+                // 移除现有输入
+                for existingInput in self.captureSession.inputs {
+                    self.captureSession.removeInput(existingInput)
+                }
+                
+                // 添加新输入
+                if self.captureSession.canAddInput(input) {
+                    self.captureSession.addInput(input)
+                    print("🎥 ✅ 摄像头输入添加成功")
+                } else {
+                    throw HealthyCodeError.cameraNotAvailable
+                }
+                
+                self.captureSession.commitConfiguration()
+                
+                // 在主线程设置预览层
+                DispatchQueue.main.async {
+                    self.setupPreviewLayer()
+                }
+                
+                // 启动会话
+                self.captureSession.startRunning()
+                
+                DispatchQueue.main.async {
+                    self.isPreviewActive = self.captureSession.isRunning
+                    print("🎥 摄像头会话启动: \(self.isPreviewActive)")
+                }
+                
+            } catch {
+                print("🎥 ❌ 创建摄像头输入失败: \(error)")
+                self.captureSession.commitConfiguration()
+                DispatchQueue.main.async {
+                    self.showErrorState(.cameraNotAvailable)
+                }
+            }
+        }
     }
     
-    // MARK: - Private Methods
-    
-    private var cancellables = Set<AnyCancellable>()
-    
-    private func setupPreviewLayer(_ previewLayer: AVCaptureVideoPreviewLayer) {
+    /// 设置预览层
+    private func setupPreviewLayer() {
         // 移除旧的预览层
-        self.previewLayer?.removeFromSuperlayer()
+        previewLayer?.removeFromSuperlayer()
         
-        // 设置新的预览层
-        self.previewLayer = previewLayer
-        previewLayer.frame = previewContainerView.bounds
-        previewLayer.videoGravity = .resizeAspectFill
+        // 创建新的预览层
+        let newPreviewLayer = AVCaptureVideoPreviewLayer(session: captureSession)
+        newPreviewLayer.videoGravity = .resizeAspectFill
+        newPreviewLayer.frame = previewContainerView.bounds
+        
+        // 设置视频方向 (使用新的 API)
+        if let connection = newPreviewLayer.connection {
+            if #available(iOS 17.0, *) {
+                if connection.isVideoRotationAngleSupported(0) {
+                    connection.videoRotationAngle = 0
+                }
+            } else {
+                if connection.isVideoOrientationSupported {
+                    connection.videoOrientation = .portrait
+                }
+            }
+        }
         
         // 添加到预览容器
-        previewContainerView.layer.insertSublayer(previewLayer, at: 0)
+        previewContainerView.layer.insertSublayer(newPreviewLayer, at: 0)
+        previewLayer = newPreviewLayer
         
-        // 确保预览层在布局更新时调整大小
-        DispatchQueue.main.async {
-            previewLayer.frame = self.previewContainerView.bounds
-        }
+        print("🎥 ✅ 预览层设置完成")
     }
     
     override func layoutSubviews() {
         super.layoutSubviews()
         
         // 更新预览层大小
-        previewLayer?.frame = previewContainerView.bounds
+        if let previewLayer = previewLayer {
+            previewLayer.frame = previewContainerView.bounds
+            print("🎥 更新预览层大小: \(previewContainerView.bounds)")
+        }
     }
     
     private func updateUI() {
@@ -363,9 +446,12 @@ class UIKitCameraPreviewView: UIView {
     private func updatePlaceholderState() {
         let shouldShowPlaceholder = !isPreviewActive || authorizationStatus != .authorized
         
+        print("🎥 更新占位符状态: shouldShow=\(shouldShowPlaceholder), isPreviewActive=\(isPreviewActive), authStatus=\(authorizationStatus)")
+        
         UIView.animate(withDuration: 0.3) {
             self.placeholderView.isHidden = !shouldShowPlaceholder
-            self.previewContainerView.alpha = shouldShowPlaceholder ? 0.3 : 1.0
+            // 当预览激活时，确保预览容器完全可见
+            self.previewContainerView.alpha = (shouldShowPlaceholder && !self.isPreviewActive) ? 0.3 : 1.0
         }
         
         // 更新占位符内容
@@ -484,7 +570,7 @@ class UIKitCameraPreviewView: UIView {
     }
     
     private func getStatusIndicatorInfo() -> (String, UIColor, Bool) {
-        if let error = currentError {
+        if currentError != nil {
             return ("exclamationmark.triangle.fill", .alertRed, false)
         }
         
@@ -526,16 +612,14 @@ class UIKitCameraPreviewView: UIView {
     }
     
     private func requestCameraPermission() {
-        guard let cameraService = cameraService else { return }
-        
-        Task {
-            let granted = await cameraService.requestCameraPermission()
-            
-            await MainActor.run {
+        AVCaptureDevice.requestAccess(for: .video) { [weak self] granted in
+            DispatchQueue.main.async {
                 if granted {
-                    self.startPreview()
+                    self?.authorizationStatus = .authorized
+                    self?.setupCameraSession()
                 } else {
-                    self.showPermissionDeniedState()
+                    self?.authorizationStatus = .denied
+                    self?.showPermissionDeniedState()
                 }
             }
         }
@@ -584,8 +668,14 @@ class UIKitCameraPreviewView: UIView {
     
     @objc private func applicationDidBecomeActive() {
         // 应用重新激活时检查权限状态
-        if let cameraService = cameraService {
-            cameraService.checkCameraPermission()
+        authorizationStatus = AVCaptureDevice.authorizationStatus(for: .video)
+    }
+    
+    deinit {
+        sessionQueue.async {
+            if self.captureSession.isRunning {
+                self.captureSession.stopRunning()
+            }
         }
     }
 }
