@@ -582,6 +582,9 @@ class WorkSessionViewController: BaseViewController {
             }
             .store(in: &cancellables)
         
+        // 立即更新当前体态状态（获取初始状态）
+        updatePostureUI(postureDetectionService.currentPosture)
+        
         // 监听体态检测是否正在运行
         postureDetectionService.$isDetecting
             .receive(on: DispatchQueue.main)
@@ -1800,7 +1803,7 @@ class WorkSessionViewController: BaseViewController {
     private func updateCenterImageViewState() {
         guard let viewModel = viewModel else { return }
         
-        print("📷 更新centerImageView状态 - 会话状态: \(viewModel.sessionState), 权限状态: \(AVCaptureDevice.authorizationStatus(for: .video).rawValue)")
+//        print("📷 更新centerImageView状态 - 会话状态: \(viewModel.sessionState), 权限状态: \(AVCaptureDevice.authorizationStatus(for: .video).rawValue)")
         
         if shouldShowCameraPreview() {
             // 如果当前没有显示摄像头预览，则切换到摄像头预览
@@ -1808,7 +1811,7 @@ class WorkSessionViewController: BaseViewController {
                 print("📷 切换到摄像头预览模式")
                 transitionToCamera()
             } else {
-                print("📷 摄像头预览已激活，保持当前状态")
+//                print("📷 摄像头预览已激活，保持当前状态")
             }
         } else {
             // 如果当前显示摄像头预览，则切换到静态图片

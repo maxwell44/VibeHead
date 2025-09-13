@@ -314,11 +314,14 @@ class PostureDetectionService: NSObject, PostureDetectionServiceProtocol, @unche
             
             // Use the most detailed results available
             if !landmarkResults.isEmpty {
+                print("🔍 Using landmarks results: \(landmarkResults.count) faces")
                 handleFaceLandmarksResults(landmarkResults)
             } else if !faceResults.isEmpty {
+                print("🔍 Using face detection results: \(faceResults.count) faces")
                 handleFaceDetectionResults(faceResults)
             } else {
                 // No face detected in any request
+                print("🔍 No face detected in any request, setting .notPresent")
                 DispatchQueue.main.async { [weak self] in
                     self?.updatePosture(.notPresent)
                 }
@@ -519,8 +522,11 @@ class PostureDetectionService: NSObject, PostureDetectionServiceProtocol, @unche
     }
     
     private func updatePosture(_ newPosture: PostureType) {
+        print("🔍 updatePosture called: \(newPosture.rawValue), current: \(currentPosture.rawValue)")
+        
         guard newPosture != currentPosture else { 
             // Update bad posture duration if still in bad posture
+            print("🔍 Same posture, updating duration only")
             updateBadPostureDuration()
             return 
         }
