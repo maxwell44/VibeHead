@@ -14,7 +14,7 @@ import Combine
 class WorkSessionViewController: BaseViewController {
     
     // MARK: - Properties
-    private let viewModel = WorkSessionViewModel()
+    private var viewModel: WorkSessionViewModel!
     private var cancellables = Set<AnyCancellable>()
     
     // MARK: - UI Components
@@ -254,13 +254,28 @@ class WorkSessionViewController: BaseViewController {
     
     override func viewDidLoad() {
         super.viewDidLoad()
+        
+        print("🚀 WorkSessionViewController: 开始初始化")
+        
+        // 延迟初始化ViewModel以避免阻塞UI
+        DispatchQueue.main.async { [weak self] in
+            self?.initializeViewModel()
+        }
+        
         setupUI()
         setupConstraints()
-        setupBindings()
         setupNavigationBar()
         setupInitialState()
         
         print("🚀 WorkSessionViewController: 视图控制器加载完成")
+    }
+    
+    private func initializeViewModel() {
+        print("🚀 WorkSessionViewController: 开始初始化ViewModel")
+        viewModel = WorkSessionViewModel()
+        setupBindings()
+        updateUI()
+        print("🚀 WorkSessionViewController: ViewModel初始化完成")
     }
     
     override func viewWillAppear(_ animated: Bool) {
@@ -505,6 +520,7 @@ class WorkSessionViewController: BaseViewController {
     // MARK: - UI Update Methods
     
     private func updateUI() {
+        guard viewModel != nil else { return }
         updateTimerDisplay()
         updatePostureStatus()
         updateSessionInfo()
@@ -513,6 +529,8 @@ class WorkSessionViewController: BaseViewController {
     }
     
     private func updateTimerDisplay() {
+        guard let viewModel = viewModel else { return }
+        
         let timeRemaining = viewModel.timeRemaining
         let minutes = Int(timeRemaining) / 60
         let seconds = Int(timeRemaining) % 60
@@ -543,6 +561,8 @@ class WorkSessionViewController: BaseViewController {
     }
     
     private func updatePostureStatus() {
+        guard let viewModel = viewModel else { return }
+        
         let posture = viewModel.currentPosture
         let isDetecting = viewModel.isDetecting
         
@@ -586,6 +606,8 @@ class WorkSessionViewController: BaseViewController {
     }
     
     private func updateSessionInfo() {
+        guard let viewModel = viewModel else { return }
+        
         let isSessionActive = viewModel.isRunning || viewModel.isPaused
         sessionInfoContainerView.isHidden = !isSessionActive
         
@@ -611,6 +633,8 @@ class WorkSessionViewController: BaseViewController {
     }
     
     private func updateControlButtons() {
+        guard let viewModel = viewModel else { return }
+        
         // 更新主要操作按钮
         primaryActionButton.setTitle(viewModel.primaryButtonTitle, for: .normal)
         
@@ -641,6 +665,8 @@ class WorkSessionViewController: BaseViewController {
     }
     
     private func updateNavigationBarButtons() {
+        guard let viewModel = viewModel else { return }
+        
         if viewModel.showStatsButton {
             let statsBarButton = UIBarButtonItem(
                 title: "统计",
@@ -656,6 +682,8 @@ class WorkSessionViewController: BaseViewController {
     }
     
     private func updateCameraPreview() {
+        guard let viewModel = viewModel else { return }
+        
         switch viewModel.cameraPermissionStatus {
         case .authorized:
             if let previewLayer = viewModel.postureService.previewLayer {
@@ -697,16 +725,20 @@ class WorkSessionViewController: BaseViewController {
     }
     
     @objc private func resetButtonTapped() {
+        guard let viewModel = viewModel else { return }
+        
         showConfirmation(
             title: "重置会话",
             message: "确定要重置当前会话吗？所有进度将丢失。",
             confirmTitle: "重置"
         ) {
-            self.viewModel.resetSession()
+            viewModel.resetSession()
         }
     }
     
     @objc private func statsButtonTapped() {
+        guard let viewModel = viewModel else { return }
+        
         viewModel.showStatistics()
         presentStatisticsViewController()
     }
@@ -716,6 +748,8 @@ class WorkSessionViewController: BaseViewController {
     }
     
     private func handlePrimaryAction() {
+        guard let viewModel = viewModel else { return }
+        
         switch viewModel.sessionState {
         case .idle, .completed:
             if viewModel.cameraPermissionStatus == .denied || viewModel.cameraPermissionStatus == .restricted {
@@ -798,7 +832,8 @@ class WorkSessionViewController: BaseViewController {
         super.viewDidLayoutSubviews()
         
         // 更新摄像头预览层frame
-        if let previewLayer = viewModel.postureService.previewLayer {
+        if let viewModel = viewModel,
+           let previewLayer = viewModel.postureService.previewLayer {
             previewLayer.frame = cameraPreviewView.bounds
         }
     }
