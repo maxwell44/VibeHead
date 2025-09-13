@@ -202,10 +202,21 @@ class PomodoroService: PomodoroServiceProtocol {
     
     /// 加载设置
     private func loadSettings() {
-        // 这里可以从UserDefaults或其他存储中加载设置
-        // 暂时使用默认设置
-        settings = .default
+        // 从数据仓库加载设置
+        let repository = LocalDataRepository()
+        settings = repository.getAppSettings()
         resetTimer()
+    }
+    
+    /// 更新设置
+    func updateSettings(_ newSettings: AppSettings) {
+        settings = newSettings
+        resetTimer()
+        setupPostureWarningService()
+        
+        // 保存设置到数据仓库
+        let repository = LocalDataRepository()
+        repository.saveAppSettings(settings)
     }
     
     /// 设置体态警告服务

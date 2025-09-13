@@ -43,4 +43,8 @@ protocol PomodoroServiceProtocol: ObservableObject {
     /// 添加体态记录到当前会话
     /// - Parameter record: 体态记录
     func addPostureRecord(_ record: PostureRecord)
+    
+    /// 更新设置
+    /// - Parameter settings: 新的设置
+    func updateSettings(_ settings: AppSettings)
 }

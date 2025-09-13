@@ -386,23 +386,12 @@ struct WorkSessionView: View {
     
     @ViewBuilder
     private var settingsSheet: some View {
-        NavigationView {
-            VStack {
-                Text("设置界面")
-                    .font(.title2)
-                Text("即将推出...")
-                    .foregroundColor(.secondary)
+        SettingsView(
+            statisticsService: viewModel.statisticsService,
+            onSettingsChanged: { settings in
+                viewModel.updateSettings(settings)
             }
-            .navigationTitle("设置")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("完成") {
-                        viewModel.hideSettings()
-                    }
-                }
-            }
-        }
+        )
     }
     
     // MARK: - Computed Properties

@@ -285,7 +285,7 @@ class WorkSessionViewModel: ObservableObject {
     
     /// 更新应用设置
     func updateSettings(_ settings: AppSettings) {
-        pomodoroService.settings = settings
+        pomodoroService.updateSettings(settings)
         
         // 更新体态检测服务设置
         if let postureService = postureService as? PostureDetectionService {
