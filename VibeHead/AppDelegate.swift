@@ -10,11 +10,27 @@ import UIKit
 @main
 class AppDelegate: UIResponder, UIApplicationDelegate {
 
-
-
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-        // Override point for customization after application launch.
+        print("🚀 AppDelegate: UIKit应用启动")
+        
+        // 配置应用级别的外观和行为
+        configureAppearance()
+        
         return true
+    }
+    
+    // MARK: - Private Methods
+    
+    private func configureAppearance() {
+        // 配置全局外观
+        if #available(iOS 15.0, *) {
+            UITableView.appearance().sectionHeaderTopPadding = 0
+        }
+        
+        // 配置状态栏样式
+        UIApplication.shared.statusBarStyle = .default
+        
+        print("🚀 AppDelegate: 全局外观配置完成")
     }
 
     // MARK: UISceneSession Lifecycle

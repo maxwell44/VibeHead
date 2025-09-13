@@ -7,7 +7,6 @@
 
 import Foundation
 import Combine
-import SwiftUI
 import AVFoundation
 
 /// 主工作界面的ViewModel，协调番茄时钟和体态检测服务
@@ -76,12 +75,23 @@ class WorkSessionViewModel: ObservableObject {
     
     // MARK: - Initialization
     init() {
-        self.pomodoroService = PomodoroService()
-        self.postureService = PostureDetectionService()
-        self.statisticsService = StatisticsService()
+        print("🔧 WorkSessionViewModel: Starting initialization")
         
+        // 延迟初始化服务以避免阻塞UI
+        self.statisticsService = StatisticsService()
+        print("🔧 WorkSessionViewModel: StatisticsService initialized")
+        
+        self.pomodoroService = PomodoroService()
+        print("🔧 WorkSessionViewModel: PomodoroService initialized")
+        
+        self.postureService = PostureDetectionService()
+        print("🔧 WorkSessionViewModel: PostureDetectionService initialized")
+        
+        print("🔧 WorkSessionViewModel: Setting up bindings")
         setupBindings()
         setupPostureIntegration()
+        
+        print("🔧 WorkSessionViewModel: Initialization completed")
     }
     
     init(

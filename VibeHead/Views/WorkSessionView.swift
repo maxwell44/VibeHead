@@ -33,6 +33,9 @@ struct WorkSessionView: View {
             }
             .navigationTitle("HealthyCode")
             .navigationBarTitleDisplayMode(.inline)
+            .onAppear {
+                print("🎯 WorkSessionView: View appeared")
+            }
             .toolbar {
                 toolbarContent
             }

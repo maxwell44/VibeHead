@@ -5,7 +5,8 @@
 //  Created by Kiro on 2025/9/12.
 //
 
-import SwiftUI
+import Foundation
+import UIKit
 
 /// 体态类型枚举，定义四种不同的体态状态
 enum PostureType: String, CaseIterable, Codable {
@@ -15,12 +16,12 @@ enum PostureType: String, CaseIterable, Codable {
     case tooClose = "太近"
     
     /// 每种体态对应的颜色
-    var color: Color {
+    var color: UIColor {
         switch self {
         case .excellent:
-            return .green
+            return .systemGreen
         case .lookingDown, .tilted, .tooClose:
-            return .orange
+            return .systemOrange
         }
     }
     

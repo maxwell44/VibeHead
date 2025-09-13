@@ -6,28 +6,55 @@
 //
 
 import UIKit
-import SwiftUI
 
 class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
     var window: UIWindow?
 
-
     func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {
-        // Use this method to optionally configure and attach the UIWindow `window` to the provided UIWindowScene `scene`.
         guard let windowScene = (scene as? UIWindowScene) else { return }
         
-        // 创建数据仓库
-        let dataRepository = LocalDataRepository()
+        print("🚀 SceneDelegate: Starting UIKit scene setup")
         
-        // 直接创建主工作视图
-        let workSessionView = WorkSessionView()
-            .environmentObject(dataRepository)
+        // 创建UIKit根视图控制器
+        let rootViewController = createRootViewController()
+        let navigationController = UINavigationController(rootViewController: rootViewController)
         
-        // 使用UIHostingController包装SwiftUI视图
+        // 配置导航栏外观
+        configureNavigationBarAppearance(navigationController)
+        
+        // 设置窗口
         window = UIWindow(windowScene: windowScene)
-        window?.rootViewController = UIHostingController(rootView: workSessionView)
+        window?.rootViewController = navigationController
         window?.makeKeyAndVisible()
+        
+        print("🚀 SceneDelegate: UIKit window setup completed")
+    }
+    
+    // MARK: - Private Methods
+    
+    private func createRootViewController() -> UIViewController {
+        // 使用新的WorkSessionViewController作为根视图控制器
+        let workSessionViewController = WorkSessionViewController()
+        return workSessionViewController
+    }
+
+    
+    private func configureNavigationBarAppearance(_ navigationController: UINavigationController) {
+        let appearance = UINavigationBarAppearance()
+        appearance.configureWithOpaqueBackground()
+        appearance.backgroundColor = .systemBackground
+        appearance.titleTextAttributes = [
+            .foregroundColor: UIColor.label,
+            .font: UIFont.systemFont(ofSize: 18, weight: .semibold)
+        ]
+        
+        navigationController.navigationBar.standardAppearance = appearance
+        navigationController.navigationBar.scrollEdgeAppearance = appearance
+        navigationController.navigationBar.compactAppearance = appearance
+        
+        navigationController.navigationBar.tintColor = .systemBlue
+        navigationController.navigationBar.prefersLargeTitles = false
     }
 
     func sceneDidDisconnect(_ scene: UIScene) {
